@@ -8,6 +8,13 @@
 后续如果要将 Foreign Key 修改为 ManyToMany，需要先保留当前 Key，新建一个，完成迁移后再删除
     e.g.
         entries = await WordEntry.all().prefetch_related("tag")
+
+主机：你的 Tailscale IP（100.x.x.x）
+端口：3306
+用户名：team_rw
+密码：Strong#Passw0rd!
+数据库：dict
+
 """
 
 from tortoise.models import Model
