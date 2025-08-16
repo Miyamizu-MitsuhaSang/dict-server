@@ -5,7 +5,7 @@ from tortoise.exceptions import DoesNotExist
 
 from app.models.base import User
 from app.models.fr import DefinitionFr
-from app.utils.security import get_current_user
+from app.utils.security import is_admin_user
 from app.api.admin.router import admin_router
 import app.models.fr as fr
 import app.models.jp as jp
@@ -17,7 +17,7 @@ async def get_wordlist(request: Request,
                        page: int = Query(1, ge=1),
                        page_size: int = Query(10, le=10),
                        lang_code: Literal["fr", "jp"] = "fr",
-                       admin_user: Tuple[User, dict] = Depends(get_current_user)):
+                       admin_user: Tuple[User, dict] = Depends(is_admin_user)):
     """
     后台管理系统中关于词典部分的初始界面，分页显示
     :param request: 请求头
@@ -56,7 +56,7 @@ async def get_wordlist(request: Request,
 async def search_word(
         request: Request,
         search_word: SearchWordRequest,
-        admin_user: Tuple[User, dict] = Depends(get_current_user),
+        admin_user: Tuple[User, dict] = Depends(is_admin_user),
 ):
     """
     查询单词
@@ -102,7 +102,7 @@ async def search_word(
         return result
 
 
-@admin_router.post("/dict/adjust")
+@admin_router.put("/dict/adjust")
 async def adjust_dict(
         request: Request,
         updated_contents: UpdateWordSet,

@@ -27,10 +27,13 @@ async def register(user_in: UserIn):
                                  pwd_hashed=hashed_pwd,
                                  language=lang_pref,  # 后续检查参数是否正确
                                  portrait=user_in.portrait)
-    return new_user
+    return {
+        "id": new_user.id,
+        "message": "register success",
+    }
 
 
-@users_router.post("/update")
+@users_router.put("/update")
 async def user_modification(updated_user: UpdateUserRequest, current_user: User = Depends(get_current_user)):
     reserved_words = await ReservedWords.filter(category="username").values_list("reserved", flat=True)
     # 验证当前密码
@@ -61,7 +64,7 @@ async def user_login(user_in: UserLoginRequest):
     payload = {
         "user_id": user.id,
         "exp": datetime.now(timezone.utc) + timedelta(hours=2),  # 设置过期时间
-        "is_admin" : user.is_admin,
+        "is_admin": user.is_admin,
     }
 
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
