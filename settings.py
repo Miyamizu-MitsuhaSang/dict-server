@@ -1,3 +1,5 @@
+from pydantic.v1 import BaseSettings
+
 TORTOISE_ORM = {
     'connections': {
         'default': {
@@ -32,4 +34,8 @@ TORTOISE_ORM = {
     'timezone': 'Asia/Shanghai'
 }
 
-SECRET_KEY = "asdasdasd-odjfnsodfnosidnfdf-0oq2j01j0jf0i1ej0fij10fd"
+class Settings(BaseSettings):
+    USE_OAUTH = False
+    SECRET_KEY = "asdasdasd-odjfnsodfnosidnfdf-0oq2j01j0jf0i1ej0fij10fd"
+
+settings = Settings()
