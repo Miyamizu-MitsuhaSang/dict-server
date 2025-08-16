@@ -34,8 +34,13 @@ async def validate_password(password: str):
         raise HTTPException(status_code=400, detail="密码长度必须在6到20之间")
     if not re.search(r'\d', password):
         raise HTTPException(status_code=400, detail="密码必须包含至少一个数字")
-    if re.search(r'[^a-zA-Z0-9]', password):
-        raise HTTPException(status_code=400, detail="密码不能包含特殊字符，只能包含字母和数字")
+    # 检查是否包含允许的特殊字符（白名单方式）
+    allowed_specials = r"!@#$%^&*()_\-+=\[\]{};:'\",.<>?/\\|`~"
+    if re.search(fr"[^\da-zA-Z{re.escape(allowed_specials)}]", password):
+        raise HTTPException(
+            status_code=400,
+            detail=f"密码只能包含字母、数字和常见特殊字符 {allowed_specials}"
+        )
 
 
 # 登陆校验
