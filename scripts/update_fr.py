@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 from tortoise import Tortoise
 from tortoise.exceptions import MultipleObjectsReturned
+from fastapi import UploadFile
 
 from app.models.fr import DefinitionFr, WordlistFr
 from settings import TORTOISE_ORM

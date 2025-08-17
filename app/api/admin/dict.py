@@ -1,7 +1,11 @@
-from fastapi import Depends, HTTPException, Request, Query
+import tempfile
+from pathlib import Path
+
+from fastapi import Depends, HTTPException, Request, Query, UploadFile, File
 from typing import Literal, Tuple, Union
 
 from tortoise.exceptions import DoesNotExist
+from tortoise.transactions import in_transaction
 
 from app.models.base import User
 from app.models.fr import DefinitionFr
@@ -10,6 +14,7 @@ from app.api.admin.router import admin_router
 import app.models.fr as fr
 import app.models.jp as jp
 from app.schemas.admin_schemas import CreateWord, UpdateWordSet, UpdateWord, SearchWordRequest
+from scripts.update_fr import import_wordlist_fr, import_def_fr
 
 
 @admin_router.get("/dict")
@@ -106,7 +111,7 @@ async def search_word(
 async def adjust_dict(
         request: Request,
         updated_contents: UpdateWordSet,
-        admin_user: Tuple[User, dict] = Depends(get_current_user)
+        admin_user: Tuple[User, dict] = Depends(is_admin_user)
 ):
     """
     只关心更新的内容，不关心未改变的内容。
@@ -167,11 +172,11 @@ async def adjust_dict(
     }
 
 
-@admin_router.post("/dict/add")
+@admin_router.post("/dict/add", deprecated=False)
 async def add_dict(
         request: Request,
         new_word: CreateWord,
-        admin_user: Tuple[User, dict] = Depends(get_current_user)
+        admin_user: Tuple[User, dict] = Depends(is_admin_user),
 ) -> None:
     if not admin_user[0].is_admin:
         raise HTTPException(status_code=403, detail="非管理员，无权限访问")
@@ -198,3 +203,31 @@ async def add_dict(
             raise HTTPException(status_code=409, detail="释义已存在")
     else:
         raise HTTPException(status_code=400, detail="暂不支持语言类型")
+
+
+@admin_router.post("/dict/update_by_xlsx", deprecated=False)
+async def update_by_xlsx(
+        file: UploadFile = File(...),
+        admin_user: Tuple[User, dict] = Depends(is_admin_user),
+):
+    """
+        上传法语词典Excel文件并导入至数据库
+    """
+
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="文件格式必须为Excel（.xlsx或.xls）")
+
+    try:
+        suffix = Path(file.filename).suffix
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+
+        async with in_transaction():
+            await import_wordlist_fr(path=tmp_path)
+            await import_def_fr(path=tmp_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导入失败：{str(e)}")
+
+    return {"message": "导入成功"}
