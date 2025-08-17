@@ -6,7 +6,7 @@ import redis.asyncio as redis
 
 from app.models.base import ReservedWords, User, Language
 from app.utils.security import verify_password, hash_password, validate_password, validate_username, get_current_user
-from settings import SECRET_KEY
+from settings import settings
 from app.core.redis import get_redis
 
 from app.schemas.user_schemas import UserIn, UserOut, UpdateUserRequest, UserLoginRequest
@@ -67,7 +67,7 @@ async def user_login(user_in: UserLoginRequest):
         "is_admin": user.is_admin,
     }
 
-    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
     return {
         "access_token": token,

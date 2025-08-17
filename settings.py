@@ -2,21 +2,8 @@ from pydantic.v1 import BaseSettings
 
 TORTOISE_ORM = {
     'connections': {
-        'default': {
-            # 'engine': 'tortoise.backends.asyncpg',  PostgreSQL
-            'engine': 'tortoise.backends.mysql',  # MySQL or Mariadb
-            'credentials': {
-                'host': '127.0.0.1',
-                'port': '3306',
-                'user': 'root',
-                'password': 'enterprise',
-                'database': 'dict',
-                'minsize': 1,
-                'maxsize': 5,
-                'charset': 'utf8mb4',
-                "echo": True
-            }
-        },
+        "default": "mysql://local_admin:enterprise@127.0.0.1:3306/dict",
+        "production": "mysql://local_admin:enterprise@127.0.0.1:3306/prod_db",
     },
     'apps': {
         'models': {
@@ -34,8 +21,10 @@ TORTOISE_ORM = {
     'timezone': 'Asia/Shanghai'
 }
 
+
 class Settings(BaseSettings):
     USE_OAUTH = False
     SECRET_KEY = "asdasdasd-odjfnsodfnosidnfdf-0oq2j01j0jf0i1ej0fij10fd"
+
 
 settings = Settings()

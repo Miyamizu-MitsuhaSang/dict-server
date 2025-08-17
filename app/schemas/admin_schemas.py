@@ -3,10 +3,6 @@ from enum import Enum
 from pydantic import BaseModel, validator, field_validator, Field
 from typing import Optional, Literal, List
 
-from tortoise.exceptions import DoesNotExist
-
-from app.models.fr import WordlistFr
-
 
 class PosEnumFr(str, Enum):
     # noun
@@ -21,6 +17,10 @@ class PosEnumFr(str, Enum):
     v_i = "v.i."
     v_pr = "v.pr."
     v_t_i = "v.t./v.i."
+    v_t_dir = "v.t.dir."
+    v_t_ind = "v.t.ind."
+    v_t_pr = "v.t.(v.pr.)"
+    v_i_ind = "v.t.ind./v.i."
 
     adj = "adj."  # adj
     adv = "adv."  # adv
@@ -29,6 +29,8 @@ class PosEnumFr(str, Enum):
     conj = "conj."
     interj = "interj."
     chauff = "chauff"
+    art = "art."
+
 
 
 class PosEnumJp(str, Enum):
@@ -55,18 +57,18 @@ class CreateWord(BaseModel):
     @classmethod
     @field_validator("eng_explanation")
     def validate_eng_explanation(cls, v):
-        if cls.language is "jp" and v:
+        if cls.language == "jp" and v:
             raise ValueError("Japanese word has no English explanation")
-        if cls.language is "fr" and v is None or v == "":
+        if cls.language == "fr" and v is None or v == "":
             raise ValueError("French word must have English explanation")
         return v
 
     @classmethod
     @field_validator("pos")
     def validate_pos(cls, v):
-        if cls.language is "fr" and v not in PosEnumFr:
+        if cls.language == "fr" and v not in PosEnumFr:
             raise ValueError("Pos is not a valid type")
-        if cls.language is "jp" and v not in PosEnumJp:
+        if cls.language == "jp" and v not in PosEnumJp:
             raise ValueError("Pos is not a valid type")
         return v
 

@@ -8,6 +8,7 @@ from settings import TORTOISE_ORM
 from app.api.users import users_router
 from app.api.admin.router import admin_router
 from app.core.redis import init_redis_pool
+import app.models.signals
 
 
 @asynccontextmanager
