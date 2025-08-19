@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from tortoise.contrib.fastapi import register_tortoise
 
 from settings import TORTOISE_ORM
 from app.api.users import users_router
 from app.api.admin.router import admin_router
+from app.api.search import dict_search
 from app.core.redis import init_redis_pool
 import app.models.signals
 
@@ -20,6 +22,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# 添加CORS中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 register_tortoise(
     app=app,
     config=TORTOISE_ORM,
@@ -27,6 +43,7 @@ register_tortoise(
 
 app.include_router(users_router, tags=["User API"], prefix="/users")
 app.include_router(admin_router, tags=["Administrator API"], prefix="/admin")
+app.include_router(dict_search, tags=["Dictionary Search API"])
 
-if __name__ == '__main__':
-    uvicorn.run("main:app", host='127.0.0.1', port=8000, reload=True)
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
