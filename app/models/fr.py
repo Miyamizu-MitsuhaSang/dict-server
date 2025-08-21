@@ -42,6 +42,6 @@ class DefinitionFr(Model):
     meaning = fields.TextField(description="单词释义")  # 如：“学习”
     example = fields.TextField(null=True, description="单词例句")
     eng_explanation = fields.TextField(null=True, description="English explanation")
-
+    example_varification = fields.BooleanField(default=False, description="例句是否审核")
     class Meta:
-        table = "definitions_fr"
+        table = "definition_fr"

@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from tkinter.scrolledtext import example
 
 import pandas as pd
 from tortoise import Tortoise, connections
@@ -91,6 +92,14 @@ async def import_def_fr(
             print(f"✅ 导入释义：{word} - {pos}")
         except Exception as e:
             print(f"❌ 插入释义失败：{word} - {pos}，错误: {e}")
+
+
+async def varification_eg():
+    """
+    更新所有的已经写入的example为已经校验检查过的
+    :return: None
+    """
+    await DefinitionFr.filter(example__not_isnull=True).update(example_varification=True)
 
 
 async def main():
