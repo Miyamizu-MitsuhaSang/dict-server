@@ -3,5 +3,6 @@
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/migrations/models/11_20250803092810_update.py" dialect="MySQL" />
     <file url="file://$PROJECT_DIR$/migrations/models/16_20250806104900_update.py" dialect="GenericSQL" />
+    <file url="file://$PROJECT_DIR$/scripts/update_fr.py" dialect="MySQL" />
   </component>
 </project>

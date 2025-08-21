@@ -2,13 +2,12 @@ import tempfile
 from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request, Query, UploadFile, File
-from typing import Literal, Tuple, Union
+from typing import Literal, Tuple
 
 from tortoise.exceptions import DoesNotExist
 from tortoise.transactions import in_transaction
 
 from app.models.base import User
-from app.models.fr import DefinitionFr
 from app.utils.security import is_admin_user
 from app.api.admin.router import admin_router
 import app.models.fr as fr
@@ -29,10 +28,9 @@ async def get_wordlist(request: Request,
     :param page: 显示的表格视窗的页数，起始默认为 1
     :param page_size: 控制每页的单词内容条数
     :param lang_code: 查询并显示对应语言的单词表
+    :param admin_user: 管理员权限校验（自动完成）
     :return: None
     """
-    if not admin_user[0].is_admin:
-        raise HTTPException(status_code=403, detail="非管理员，无权限访问")
     offset = (page - 1) * page_size
     if lang_code == "fr":
         total = await fr.DefinitionFr.all().count()
@@ -201,8 +199,8 @@ async def add_dict(
         )
         if not created:
             raise HTTPException(status_code=409, detail="释义已存在")
-    else:
-        raise HTTPException(status_code=400, detail="暂不支持语言类型")
+        else:
+            raise HTTPException(status_code=400, detail="暂不支持语言类型")
 
 
 @admin_router.post("/dict/update_by_xlsx", deprecated=False)
@@ -229,5 +227,6 @@ async def update_by_xlsx(
             await import_def_fr(path=tmp_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"导入失败：{str(e)}")
+        #TODO: 导入失败后的回滚（删除本次已经添加的内容）
 
     return {"message": "导入成功"}
