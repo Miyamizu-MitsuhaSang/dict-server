@@ -226,7 +226,7 @@ async def update_by_xlsx(
             await import_wordlist_fr(path=tmp_path)
             await import_def_fr(path=tmp_path)
     except Exception as e:
+        # Tortoise ORM 会自动回滚事务，所以无需手动删除已添加内容
         raise HTTPException(status_code=500, detail=f"导入失败：{str(e)}")
-        #TODO: 导入失败后的回滚（删除本次已经添加的内容）
 
     return {"message": "导入成功"}

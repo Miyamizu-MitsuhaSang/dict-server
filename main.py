@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from tortoise.contrib.fastapi import register_tortoise
 
+from app.utils import redis_client
 from settings import TORTOISE_ORM
 from app.api.users import users_router
 from app.api.admin.router import admin_router
@@ -17,7 +18,7 @@ import app.models.signals
 async def lifespan(app: FastAPI):
     await init_redis_pool()
     yield
-    # 可以加 await redis_client.close() 清理资源
+    await redis_client.close() # 清理资源
 
 
 app = FastAPI(lifespan=lifespan)
