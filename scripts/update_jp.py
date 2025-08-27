@@ -200,7 +200,7 @@ async def import_attachment(path: Path = xlsx_path, sheet_name: str = "日汉释
             continue
 
         hiragana = normalize_jp_text(jaconv.kata2hira(str(row[1]))) if pd.isna(row[2]) else normalize_jp_text(str(row[2]))
-        romaji = kana_to_romaji(word)
+        romaji = jaconv.kana2alphabet(hiragana)
 
         await AttachmentJp.get_or_create(
             word=word_obj,
