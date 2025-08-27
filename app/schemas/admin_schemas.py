@@ -37,10 +37,22 @@ class PosEnumJp(str, Enum):
     noun = "名词"
     adj = "形容词"
     adj_v = "形容动词"
+    adv = "连用"
     v1 = "一段动词"
     v5 = "五段动词"
     help = "助词"
-
+    self = "自动词"
+    other = "他动词"
+    tail = "接尾"
+    self_other = "自他动词"
+    follow = "接续"
+    habit = "惯用"
+    excl = "感叹词"
+    ka_v = "カ変"
+    sa_v = "サ変"
+    conn = "连体"
+    quantity = "量词"
+    pron = "代词"
 
 class CreateWord(BaseModel):
     word: str

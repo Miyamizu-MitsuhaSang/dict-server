@@ -33,8 +33,14 @@ async def register(user_in: UserIn):
     }
 
 
-@users_router.put("/update")
+@users_router.put("/update", deprecated=False)
 async def user_modification(updated_user: UpdateUserRequest, current_user: User = Depends(get_current_user)):
+    """
+
+    :param updated_user: Pydantic 模型验证修改内容（根据JSON内容修改对应字段）
+    :param current_user:
+    :return:
+    """
     reserved_words = await ReservedWords.filter(category="username").values_list("reserved", flat=True)
     # 验证当前密码
     if not await verify_password(updated_user.current_password, current_user.password_hash):
@@ -49,7 +55,6 @@ async def user_modification(updated_user: UpdateUserRequest, current_user: User 
     # 修改密码（如果提供）
     if updated_user.new_password:
         current_user.password_hash = hash_password(updated_user.new_password)
-
 
 @users_router.post("/login")
 async def user_login(user_in: UserLoginRequest):

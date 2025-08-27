@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 
 default_portrait_url = '#'
 
@@ -46,9 +46,9 @@ class UserOut(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    current_password: str
-    new_username: str
-    new_password: str
+    current_password: Optional[str] = None
+    new_username: Optional[str] = None
+    new_password: Optional[str] = None
     new_language: Literal["jp", "fr", "private"] = "private"
 
     # lang_pref: str = "jp"

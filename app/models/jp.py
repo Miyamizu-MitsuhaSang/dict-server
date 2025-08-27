@@ -67,7 +67,14 @@ class DefinitionJp(Model):
     word = fields.ForeignKeyField("models.WordlistJp", related_name="definitions", on_delete=fields.CASCADE)
     meaning = fields.TextField(description="单词释义")
     example = fields.TextField(null=True, description="单词例句")
-    pos = fields.CharEnumField(PosEnumJp, max_length=30, null=True)
+    pos = fields.ManyToManyField("models.PosType", related_name="definitions", on_delete=fields.CASCADE)
 
     class Meta:
         table = "definitions_jp"
+
+class PosType(Model):
+    id = fields.IntField(pk=True)
+    pos_type = fields.CharEnumField(PosEnumJp, max_length=30, null=False)
+
+    class Meta:
+        table = "pos_type"
