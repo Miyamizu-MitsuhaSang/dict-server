@@ -16,6 +16,8 @@ sheet_name_jp = "日汉释义"
 class WordlistJp(Model):
     id = fields.IntField(pk=True)
     text = fields.CharField(max_length=40, description="单词")
+    hiragana = fields.CharField(max_length=60, description="假名", null=False)
+    freq = fields.IntField(default=0)
     definitions : fields.ReverseRelation["DefinitionJp"]
     attachments : fields.ReverseRelation["AttachmentJp"]
 

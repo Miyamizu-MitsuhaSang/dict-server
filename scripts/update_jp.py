@@ -146,8 +146,10 @@ async def import_def_jp(path: Path = xlsx_path, sheet_name: str = "日汉释义"
             print(f"❌ 查找单词 {word} 出错: {e}")
             continue
 
+        if pd.isna(row[6]):
+            continue
         # 字段处理
-        example = None if pd.isna(row.日语例句1) else normalize_jp_text(str(row.日语例句1))
+        example = None if pd.isna(row.日语例句2) else normalize_jp_text(str(row.日语例句2))
         if not pd.isna(row.词性):
             pos_obj, jump = await pos_process(str(row.词性))
             if jump:
@@ -155,7 +157,7 @@ async def import_def_jp(path: Path = xlsx_path, sheet_name: str = "日汉释义"
         else:
             print(f"❌ {word} 的词性为空，跳过")
             continue
-        chi_exp = str(row[4]).strip()
+        chi_exp = str(row[6]).strip()   # 读取第二个释义
 
         exists = await DefinitionJp.filter(
             word=cls_word,
@@ -209,6 +211,21 @@ async def import_attachment(path: Path = xlsx_path, sheet_name: str = "日汉释
         )
 
 
+async def set_hiragana(xlsx_path: Path = xlsx_path, sheet_name : str="日汉释义"):
+    df = pd.read_excel(xlsx_path)
+    df.columns = [col.strip() for col in df.columns]
+
+    for row in df.itertuples():
+        word = normalize_jp_text(str(row[1]).strip())
+        if pd.isna(word):
+            break
+
+        hiragana = normalize_jp_text(jaconv.kata2hira(str(row[1]))) if pd.isna(row[2]) else normalize_jp_text(str(row[2]))
+        romaji = row[3]
+
+        await WordlistJp.filter(text=word).update(hiragana=hiragana)
+
+
 async def main():
     await Tortoise.init(config=TORTOISE_ORM)
     # await DefinitionJp.all().delete()  # TRUNCATE TABLE definitions_fr;
@@ -216,7 +233,8 @@ async def main():
     # await AttachmentJp.all().delete()
     # await import_wordlist_jp()
     # await import_def_jp()
-    await import_attachment()
+    # await import_attachment()
+    await set_hiragana()
 
 
 if __name__ == '__main__':

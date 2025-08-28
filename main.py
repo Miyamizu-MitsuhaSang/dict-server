@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+import debug.httpdebugger
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,

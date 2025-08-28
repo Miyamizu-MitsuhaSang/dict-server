@@ -15,7 +15,7 @@ class WordlistFr(Model):
     text = fields.CharField(max_length=40, unique=True, description="单词")
     definitions: fields.ReverseRelation["DefinitionFr"]
     attachments: fields.ReverseRelation["AttachmentFr"]
-    freq = fields.IntField()  # 词频排序用
+    freq = fields.IntField(default=0)  # 词频排序用
     search_text = fields.CharField(max_length=255, index=True)  # 检索字段
 
     # attachment = fields.ForeignKeyField("models.Attachment", related_name="wordlists", on_delete=fields.CASCADE)
@@ -44,4 +44,4 @@ class DefinitionFr(Model):
     eng_explanation = fields.TextField(null=True, description="English explanation")
     example_varification = fields.BooleanField(default=False, description="例句是否审核")
     class Meta:
-        table = "definition_fr"
+        table = "definitions_fr"

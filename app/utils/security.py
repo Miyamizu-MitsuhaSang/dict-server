@@ -130,29 +130,19 @@ async def get_current_user_with_oauth(
     return await _decode_and_load_user(token)
 
 
-async def get_current_user(*args, **kwargs) -> Tuple[User, Dict]:
+async def get_current_user(
+        request: Request,
+        token: Annotated[str, Depends(oauth2_scheme)] = None
+) -> Tuple[User, Dict]:
     if settings.USE_OAUTH:
-        return await get_current_user_with_oauth(*args, **kwargs)
-    return await get_current_user_with_oauth(*args, **kwargs)
+        return await get_current_user_with_oauth(token)
+    return await get_current_user_basic(request)
 
 
-async def is_admin_user_basic(user_payload: Tuple[User, Dict] = Depends(get_current_user)) -> Tuple[User, Dict]:
-    user, payload = user_payload
-    if not getattr(user, "is_admin", False):
-        raise HTTPException(status_code=403, detail="Access denied")
-    return user, payload
-
-
-async def is_admin_user_oauth(
-        user_payload: Tuple[User, Dict] = Depends(get_current_user_with_oauth)
+async def is_admin_user(
+    user_payload: Tuple[User, Dict] = Depends(get_current_user),
 ) -> Tuple[User, Dict]:
     user, payload = user_payload
     if not getattr(user, "is_admin", False):
         raise HTTPException(status_code=403, detail="Access denied")
     return user, payload
-
-
-async def is_admin_user(*args, **kwargs) -> Tuple[User, Dict]:
-    if settings.USE_OAUTH:
-        return await is_admin_user_basic(*args, **kwargs)
-    return await is_admin_user_oauth(*args, **kwargs)
