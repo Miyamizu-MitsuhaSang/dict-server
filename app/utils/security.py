@@ -12,7 +12,7 @@ from app.models.base import ReservedWords, User
 
 from settings import settings
 
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+redis_client = redis.Redis(host="127.0.0.1", port=6379, decode_responses=True)
 ALGORITHM = "HS256"
 
 
