@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 from fugashi import Tagger
+import unidic_lite
+from importlib import resources
 from pykakasi import kakasi
 from tortoise import Tortoise
 from tortoise.exceptions import MultipleObjectsReturned
@@ -54,7 +56,8 @@ async def pos_process(pos: str):
 
 
 # 初始化分词器
-tagger = Tagger()
+dicdir = resources.files('unidic_lite').joinpath('dicdir')
+tagger = Tagger(f"-d {dicdir}")
 
 # 初始化 kakasi 转换器
 kakasi_inst = kakasi()
