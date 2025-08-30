@@ -9,7 +9,7 @@ async def init_redis():
     global redis_client
     if redis_client is None:
         redis_client = await redis.Redis(
-            host="localhost",
+            host="127.0.0.1",
             port=6379,
             decode_responses=True,  # 返回 str 而不是 Bytes
         )
@@ -26,5 +26,7 @@ async def close_redis():
 
 # FastAPI 依赖注入用的获取方法
 async def get_redis() -> AsyncGenerator[redis.Redis, None]:
-    assert redis_client is not None, "Redis 未初始化"
+    global redis_client
+    if redis_client is None:
+        await init_redis()   # 懒加载，避免 NoneType
     yield redis_client
