@@ -99,7 +99,7 @@ async def user_logout(request: Request,
 
     exp = payload.get("exp")
     now = datetime.now(timezone.utc).timestamp()
-    ttl = int(exp - now) if exp else 7200
+    ttl = max(int(exp - now), 1) if exp else 7200
 
     # try:
     #     payload = jwt.decode(raw_token, SECRET_KEY, algorithms=["HS256"])
