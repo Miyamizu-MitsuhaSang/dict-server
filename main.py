@@ -7,7 +7,7 @@ from tortoise.contrib.fastapi import register_tortoise
 
 from app.api.redis_test import redis_test_router
 from app.utils import redis_client
-from settings import TORTOISE_ORM
+from settings import TORTOISE_ORM,ONLINE_SETTINGS
 from app.api.users import users_router
 from app.api.admin.router import admin_router
 from app.api.search import dict_search
@@ -45,7 +45,7 @@ app.add_middleware(
 
 register_tortoise(
     app=app,
-    config=TORTOISE_ORM,
+    config=ONLINE_SETTINGS,
 )
 
 app.include_router(users_router, tags=["User API"], prefix="/users")
