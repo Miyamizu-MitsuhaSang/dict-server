@@ -1,3 +1,4 @@
+jaconv
 fugashi
 pykakasi
 aerich==0.9.1
