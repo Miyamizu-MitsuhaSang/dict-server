@@ -8,6 +8,7 @@ from app.models import DefinitionJp
 from app.models.fr import DefinitionFr
 from app.schemas.search_schemas import SearchRequest, SearchResponse, SearchItemFr, SearchItemJp
 from app.utils.all_kana import all_in_kana
+from app.utils.autocomplete import suggest_autocomplete
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
 from scripts.update_jp import normalize_jp_text
@@ -79,9 +80,13 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
 # TODO 相关度排序（转换为模糊匹配）
 # TODO 输入搜索框时反馈内容
 
-# @dict_search.post("search/list")
-# async def search_list(body: SearchRequest, user=Depends(get_current_user)):
-#     query = body.query
-#     if body.language == 'fr':
-#         query = normalize_text(query)
-#         prefix = await DefinitionFr.filter(word__text__icontains=query)
+@dict_search.post("search/list")
+async def search_list(query_word: SearchRequest, user=Depends(get_current_user)):
+    """
+    检索时的提示接口
+    :param query_word: 用户输入的内容
+    :param user:
+    :return: 待选列表
+    """
+    word_contents = await suggest_autocomplete(query=query_word)
+    return word_contents
