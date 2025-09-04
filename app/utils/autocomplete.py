@@ -25,7 +25,11 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[st
             .get_or_none(text=query.query)
             .values("text", "freq")
         )
-        exact_word = [(exact.get("text"), exact.get("freq"))]
+        if exact:
+            exact_word = [(exact.get("text"), exact.get("freq"))]
+        else:
+            exact_word = []
+
         qs_prefix = (
             WordlistFr
             .filter(Q(search_text__startswith=query_word) | Q(text__startswith=query.query))
@@ -56,7 +60,10 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[st
             .get_or_none(text=query.query)
             .only("text", "freq")
         )
-        exact_word = [(exact.text, exact.freq)]
+        if exact:
+            exact_word = [(exact.text, exact.freq)]
+        else:
+            exact_word = []
 
         qs_prefix = (
             WordlistJp

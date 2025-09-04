@@ -50,10 +50,11 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
             contents=contents,
         )
     else:
-        query = all_in_kana(query)
+        query_kana = all_in_kana(query)
         print(query)
         word_content = await DefinitionJp.filter(
-            word__text=query
+            word__text=query,
+            word__hiragana=query_kana,
         ).prefetch_related("word", "pos")
         if not word_content:
             raise HTTPException(status_code=404, detail="Word not found")
@@ -80,7 +81,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
 # TODO 相关度排序（转换为模糊匹配）
 # TODO 输入搜索框时反馈内容
 
-@dict_search.post("search/list")
+@dict_search.post("/search/list")
 async def search_list(query_word: SearchRequest, user=Depends(get_current_user)):
     """
     检索时的提示接口
@@ -88,5 +89,6 @@ async def search_list(query_word: SearchRequest, user=Depends(get_current_user))
     :param user:
     :return: 待选列表
     """
+    print(query_word.query, query_word.language, query_word.sort, query_word.order)
     word_contents = await suggest_autocomplete(query=query_word)
-    return word_contents
+    return {"list": word_contents}
