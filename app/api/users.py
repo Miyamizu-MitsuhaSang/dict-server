@@ -14,7 +14,7 @@ from app.schemas.user_schemas import UserIn, UserOut, UpdateUserRequest, UserLog
 users_router = APIRouter()
 
 
-@users_router.post("/register", response_model=UserOut)
+@users_router.post("/register")
 async def register(user_in: UserIn):
     await validate_username(user_in.username)
     await validate_password(user_in.password)
@@ -23,10 +23,15 @@ async def register(user_in: UserIn):
 
     lang_pref = await Language.get(code=user_in.lang_pref)
 
-    new_user = await User.create(name=user_in.username,
-                                 pwd_hashed=hashed_pwd,
-                                 language=lang_pref,  # 后续检查参数是否正确
-                                 portrait=user_in.portrait)
+    new_user, created = await User.get_or_create(
+        name=user_in.username,
+        defaults={
+            "pwd_hashed": hashed_pwd,
+            "language": lang_pref,
+            "portrait": user_in.portrait,},
+    )
+    if not created:
+        raise HTTPException(status_code=400, detail="Username already exists")
     return {
         "id": new_user.id,
         "message": "register success",
@@ -55,6 +60,7 @@ async def user_modification(updated_user: UpdateUserRequest, current_user: User 
     # 修改密码（如果提供）
     if updated_user.new_password:
         current_user.password_hash = hash_password(updated_user.new_password)
+
 
 @users_router.post("/login")
 async def user_login(user_in: UserLoginRequest):
