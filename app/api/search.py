@@ -18,6 +18,13 @@ dict_search = APIRouter()
 
 @dict_search.post("/search", response_model=SearchResponse)
 async def search(request: Request, body: SearchRequest, user=Depends(get_current_user)):
+    """
+    精确搜索
+    :param request:
+    :param body: 单词是依据list返回清单中的内容动态更新对数据库text字段进行精确匹配的
+    :param user:
+    :return:
+    """
     query = body.query
     if body.language == 'fr':
         query = normalize_text(query)

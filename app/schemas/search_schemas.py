@@ -1,4 +1,4 @@
-from typing import Literal, List, Union
+from typing import Literal, List, Union, Optional
 
 from pydantic import BaseModel
 
@@ -22,7 +22,7 @@ class SearchItemFr(BaseModel):
     pos: PosEnumFr
     chi_exp: str
     eng_explanation: str
-    example: str
+    example: Optional[str]
 
 
 class SearchResponse(BaseModel):
