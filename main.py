@@ -6,6 +6,7 @@ import uvicorn
 from tortoise.contrib.fastapi import register_tortoise
 
 from app.api.redis_test import redis_test_router
+from app.api.translator import translator_router
 from app.utils import redis_client
 from settings import TORTOISE_ORM,ONLINE_SETTINGS
 from app.api.users import users_router
@@ -53,6 +54,8 @@ app.include_router(admin_router, tags=["Administrator API"], prefix="/admin")
 app.include_router(dict_search, tags=["Dictionary Search API"])
 
 app.include_router(redis_test_router, tags=["Redis Test-Only API"])
+
+app.include_router(translator_router, tags=["Translation API"])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

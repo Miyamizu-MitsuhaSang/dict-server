@@ -43,8 +43,13 @@ ONLINE_SETTINGS = {
 
 
 class Settings(BaseSettings):
-    USE_OAUTH = False
-    SECRET_KEY = "asdasdasd-odjfnsodfnosidnfdf-0oq2j01j0jf0i1ej0fij10fd"
+    USE_OAUTH: bool = False
+    SECRET_KEY: str
+    BAIDU_APPID: str
+    BAIDU_APPKEY: str
+
+    class Config:
+        env_file = '.env'
 
 
 settings = Settings()
