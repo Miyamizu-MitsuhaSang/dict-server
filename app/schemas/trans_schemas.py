@@ -4,7 +4,8 @@ from pydantic import BaseModel, field_validator, model_validator
 
 
 class TransRequest(BaseModel):
-    from_lang: Literal['fr', 'jp', 'zh'] = 'fr'
+    query: str
+    from_lang: Literal['auto', 'fr', 'jp', 'zh'] = 'auto'
     to_lang: Literal['fr', 'jp', 'zh'] = 'zh'
 
     @field_validator('from_lang', 'to_lang')

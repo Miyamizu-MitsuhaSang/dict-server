@@ -10,7 +10,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models import User
-from app.schemas.trans_schemas import TransResponse
+from app.schemas.trans_schemas import TransResponse, TransRequest
 from app.utils.security import is_admin_user, get_current_user
 from scripts.md5 import make_md5
 from settings import settings
@@ -60,18 +60,18 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
         "sign": sign,
     }
 
-    print(payload)
-
-    request = httpx.Request(
-        "POST",
-        url,
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
-    )
-    print("完整请求内容:")
-    print("URL:", request.url)
-    print("Headers:", request.headers)
-    print("Body:", request.content.decode("utf-8"))
+    # print(payload)
+    #
+    # request = httpx.Request(
+    #     "POST",
+    #     url,
+    #     data=payload,
+    #     headers={"Content-Type": "application/x-www-form-urlencoded"}
+    # )
+    # print("完整请求内容:")
+    # print("URL:", request.url)
+    # print("Headers:", request.headers)
+    # print("Body:", request.content.decode("utf-8"))
 
     async with httpx.AsyncClient(timeout=10) as client:
         response = await client.post(
@@ -94,15 +94,13 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
 
 @translator_router.post('/translate', response_model=TransResponse)
 async def translate(
-        query: str,
-        from_lang: str = 'auto',
-        to_lang: str = 'zh',
+        translate_request: TransRequest,
         user=Depends(get_current_user)
 ):
     text = await baidu_translation(
-        query=query,
-        from_lang=from_lang,
-        to_lang=to_lang
+        query=translate_request.query,
+        from_lang=translate_request.from_lang,
+        to_lang=translate_request.to_lang,
     )
     return TransResponse(translated_text=text)
 
