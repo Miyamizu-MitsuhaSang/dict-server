@@ -35,6 +35,12 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
         )
         if not word_contents:
             raise HTTPException(status_code=404, detail="Word not found")
+
+        # 修改freq
+        first_word = word_contents[0].word
+        current_freq = first_word.freq
+        await first_word.update(freq=current_freq+1)
+
         pos_seen = set()
         pos_contents = []
         contents: List[SearchItemFr] = []
