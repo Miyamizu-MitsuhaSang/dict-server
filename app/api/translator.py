@@ -1,6 +1,6 @@
 from typing import Tuple, Dict
 
-import aioredis
+import redis.asyncio as redis_asyncio
 import httpx
 import random
 import json
@@ -90,7 +90,7 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
     return "\n".join([item["dst"] for item in data["trans_result"]])
 
 
-redis = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
+redis = redis_asyncio.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
 
 
 async def rate_limiter(
