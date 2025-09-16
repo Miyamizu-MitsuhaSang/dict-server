@@ -46,7 +46,7 @@ app.add_middleware(
 
 register_tortoise(
     app=app,
-    config=TORTOISE_ORM,
+    config=ONLINE_SETTINGS,
 )
 
 app.include_router(users_router, tags=["User API"], prefix="/users")

@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     BAIDU_APPID: str
     BAIDU_APPKEY: str
+    REDIS_URL: str
 
     class Config:
         env_file = '.env'

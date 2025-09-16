@@ -1,12 +1,10 @@
-from typing import Tuple
-from wsgiref import headers
+from typing import Tuple, Dict
 
+import aioredis
 import httpx
 import random
 import json
-from hashlib import md5
 
-import requests
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models import User
@@ -92,6 +90,31 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
     return "\n".join([item["dst"] for item in data["trans_result"]])
 
 
+redis = aioredis.from_url("redis://localhost", encoding="utf-8", decode_responses=True)
+
+
+async def rate_limiter(
+        user: Tuple[User, Dict] = Depends(get_current_user),
+        limit: int = 2,
+        window: int = 1
+):
+    """
+        限制每个 IP 在 window 秒内最多 limit 次请求
+    """
+    client_ip = user[0].id
+    key = f"rate limit {client_ip}"
+
+    count = await redis.get(key)
+
+    if count is None:
+        # 第一次请求 → 设置计数和过期时间
+        await redis.set(key, 1, ex=window)
+    elif int(count) < limit:
+        await redis.incr(key)
+    else:
+        raise HTTPException(status_code=429, detail=f"Too many requests")
+
+
 @translator_router.post('/translate', response_model=TransResponse)
 async def translate(
         translate_request: TransRequest,
@@ -105,12 +128,21 @@ async def translate(
     return TransResponse(translated_text=text)
 
 
-@translator_router.post('/translate/debug')
+@translator_router.post('/translate/debug', dependencies=[Depends(rate_limiter)])
 async def test_translate(
         query: str,
         from_lang: str = "auto",
         to_lang: str = 'zh',
         admin_user: Tuple[User, dict] = Depends(is_admin_user)
 ):
+    """
+    尝试使用多次翻译请求接口，要求在前端监听输入在约300ms左右内保持不输入再传入，
+    同时后端检查避免多次恶意访问
+    :param query: 待翻译文本
+    :param from_lang: 源语言，默认auto，百度API自动检测
+    :param to_lang: 目标语言，不允许auto
+    :param admin_user: 测试接口，仅管理员权限可用
+    :return:
+    """
     raw = await baidu_translation(query, from_lang, to_lang)
     return TransResponse(translated_text=raw)
