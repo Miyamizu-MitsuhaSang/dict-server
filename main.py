@@ -8,7 +8,7 @@ from tortoise.contrib.fastapi import register_tortoise
 from app.api.redis_test import redis_test_router
 from app.api.translator import translator_router
 from app.utils import redis_client
-from settings import TORTOISE_ORM,ONLINE_SETTINGS
+from settings import TORTOISE_ORM, ONLINE_SETTINGS
 from app.api.users import users_router
 from app.api.admin.router import admin_router
 from app.api.search import dict_search
@@ -33,12 +33,7 @@ import debug.httpdebugger
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
