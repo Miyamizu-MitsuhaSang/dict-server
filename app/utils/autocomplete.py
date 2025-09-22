@@ -1,8 +1,8 @@
 import asyncio
+from typing import List, Literal, Tuple
 
 from tortoise import Tortoise
 from tortoise.expressions import Q
-from typing import List, Literal, Tuple
 
 from app.models import WordlistFr, WordlistJp
 from app.schemas.search_schemas import SearchRequest
@@ -57,7 +57,9 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[st
         query_word = all_in_kana(query.query)
         exact = await (
             WordlistJp
-            .get_or_none(text=query.query)
+            .get_or_none(
+                text=query.query
+            )
             .only("text", "freq")
         )
         if exact:

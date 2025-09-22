@@ -1,7 +1,6 @@
 import unicodedata
 
 import jaconv
-import pykakasi
 from pykakasi import kakasi
 
 # ---- 全局初始化（只做一次）----
@@ -9,6 +8,7 @@ _kakasi = kakasi()
 _kakasi.setMode("J", "H")  # Kanji -> Hiragana（依据词典近似读音）
 _kakasi.setMode("K", "H")  # Katakana -> Hiragana
 _kakasi.setMode("H", "H")  # Hiragana -> Hiragana（不变）
+_kakasi.setMode("a", "H")  # Romaji -> Hiragana
 # 可选：保留原文空格/标点；如需去除空格可自行处理
 _converter = _kakasi.getConverter()
 
@@ -25,6 +25,7 @@ def all_in_kana(text: str) -> str:
 
     # 2) 先做假名统一（片假名 -> 平假名；半角片假名也会被 NFKC 规范化）
     #   这一步对只有假名的输入能直接得到平假名
+    s = jaconv.alphabet2kata(s)
     s = jaconv.kata2hira(s)
 
     # 3) 用 pykakasi 将汉字（以及残留的片假名）转换为“平假名读音”
@@ -36,9 +37,9 @@ def all_in_kana(text: str) -> str:
     hira = jaconv.kata2hira(hira)
 
     # 5) 可选清洗：去掉多余空白（如果你不想保留空格）
-    # hira = "".join(hira.split())
+    hira = "".join(hira.split())
 
     return hira
 
 if __name__ == '__main__':
-    print(all_in_kana('能力'))
+    print(all_in_kana('ai'))
