@@ -1,12 +1,19 @@
-from pydantic import BaseModel
-from typing import Literal, Optional
+from typing import Literal, Optional, Annotated
+
+from fastapi import HTTPException
+from pydantic import BaseModel, Field
 
 default_portrait_url = '#'
+
+ChinaPhone = Annotated[str, Field(pattern=r"^1[3-9]\d{9}$")]
+EmailField = Annotated[str, Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")]
 
 
 class UserIn(BaseModel):
     username: str
     password: str
+    email: Optional[EmailField] = None
+    phone: ChinaPhone
     lang_pref: Literal['jp', 'fr', 'private'] = "private"
     portrait: str = default_portrait_url
 
@@ -56,4 +63,36 @@ class UpdateUserRequest(BaseModel):
 
 class UserLoginRequest(BaseModel):
     name: str
+    password: str
+
+
+class UserSchema(BaseModel):
+    id: int
+    name: str
+
+
+class UserResetPhoneRequest(BaseModel):
+    phone_number: ChinaPhone
+
+
+class UserDoesNotExistsError(HTTPException):
+    def __init__(self, message: str):
+        super().__init__(status_code=404, detail=message)
+
+
+class VerifyCodeRequest(BaseModel):
+    code: str
+    phone: ChinaPhone
+
+
+class UserResetEmailRequest(BaseModel):
+    email: EmailField
+
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailField
+    code: str
+
+
+class UserResetPasswordRequest(BaseModel):
     password: str

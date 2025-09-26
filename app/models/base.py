@@ -17,15 +17,17 @@
 
 """
 
-from tortoise.models import Model
 from tortoise import fields
+from tortoise.models import Model
 
 
 class User(Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=20, unique=True, description="用户名")
     pwd_hashed = fields.CharField(max_length=60, description="密码")
-    portrait = fields.CharField(max_length=120, description="用户头像")
+    portrait = fields.CharField(max_length=120, default='#', description="用户头像")
+    email = fields.CharField(max_length=120, null=True, description="e-mail")
+    encrypted_phone = fields.CharField(max_length=11, description="用户手机号")
     language = fields.ForeignKeyField("models.Language", related_name="users", on_delete=fields.CASCADE)
     is_admin = fields.BooleanField(default=False, description="管理员权限")
 

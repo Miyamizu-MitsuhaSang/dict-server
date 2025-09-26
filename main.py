@@ -1,25 +1,27 @@
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 from tortoise.contrib.fastapi import register_tortoise
 
-from app.api.redis_test import redis_test_router
-from app.api.translator import translator_router
-from app.utils import redis_client
-from settings import TORTOISE_ORM, ONLINE_SETTINGS
-from app.api.users import users_router
-from app.api.admin.router import admin_router
-from app.api.search import dict_search
-from app.core.redis import init_redis, close_redis
 import app.models.signals
+from app.api.admin.router import admin_router
+from app.api.redis_test import redis_test_router
+from app.api.search import dict_search
+from app.api.translator import translator_router
+from app.api.user.routes import users_router
+from app.core.redis import init_redis, close_redis
+from app.utils.phone_encrypt import PhoneEncrypt
+from settings import ONLINE_SETTINGS
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- startup ----
-    await init_redis()
+    app.state.redis = await init_redis()
+    # phone_encrypt
+    app.state.phone_encrypto = PhoneEncrypt.from_env()  # 接口中通过 Request 访问
     try:
         yield
     finally:
@@ -27,8 +29,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-import debug.httpdebugger
 
 # 添加CORS中间件
 app.add_middleware(

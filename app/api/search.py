@@ -1,19 +1,57 @@
 from typing import Literal, List
 
-import jaconv
-import pykakasi
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.models import DefinitionJp
+from app.models import DefinitionJp, CommentFr, CommentJp
 from app.models.fr import DefinitionFr
+from app.schemas.comment_schemas import CommentSet
 from app.schemas.search_schemas import SearchRequest, SearchResponse, SearchItemFr, SearchItemJp
 from app.utils.all_kana import all_in_kana
 from app.utils.autocomplete import suggest_autocomplete
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
-from scripts.update_jp import normalize_jp_text
 
 dict_search = APIRouter()
+
+
+async def __get_comments(
+        __query_word: str,
+        language: Literal["jp", "fr"]
+) -> CommentSet:
+    if language == "fr":
+        comments = await (
+            CommentFr
+            .filter(comment_word__word=__query_word)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+        commentlist = CommentSet(
+            comments=[
+                (
+                    comment.user.id,
+                    comment.user.name,
+                    comment.comment_text
+                ) for comment in comments
+            ]
+        )
+        return commentlist
+    else:
+        comments = await (
+            CommentJp
+            .filter(comment_word__word=__query_word)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+        commentlist = CommentSet(
+            comments=[
+                (
+                    comment.user.id,
+                    comment.user.name,
+                    comment.comment_text,
+                ) for comment in comments
+            ]
+        )
+        return commentlist
 
 
 @dict_search.post("/search", response_model=SearchResponse)
@@ -39,7 +77,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
         # 修改freq
         first_word = word_contents[0].word
         current_freq = first_word.freq
-        await first_word.update(freq=current_freq+1)
+        await first_word.update(freq=current_freq + 1)
 
         pos_seen = set()
         pos_contents = []

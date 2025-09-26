@@ -11,6 +11,7 @@ TORTOISE_ORM = {
                 'app.models.base',
                 'app.models.fr',
                 'app.models.jp',
+                'app.models.comments',
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',
@@ -31,6 +32,7 @@ ONLINE_SETTINGS = {
                 'app.models.base',
                 'app.models.fr',
                 'app.models.jp',
+                'app.models.comments'
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',

@@ -1,5 +1,6 @@
-import redis.asyncio as redis
 from typing import AsyncGenerator, Optional
+
+import redis.asyncio as redis
 
 # 全局 Redis 客户端
 redis_client: Optional[redis.Redis] = None
@@ -14,6 +15,8 @@ async def init_redis():
             decode_responses=True,  # 返回 str 而不是 Bytes
         )
     await redis_client.ping()
+
+    return redis_client
 
 async def close_redis():
     global redis_client
