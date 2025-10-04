@@ -13,7 +13,7 @@ from app.api.translator import translator_router
 from app.api.user.routes import users_router
 from app.core.redis import init_redis, close_redis
 from app.utils.phone_encrypt import PhoneEncrypt
-from settings import ONLINE_SETTINGS
+from settings import TORTOISE_ORM
 
 
 @asynccontextmanager
@@ -41,7 +41,7 @@ app.add_middleware(
 
 register_tortoise(
     app=app,
-    config=ONLINE_SETTINGS,
+    config=TORTOISE_ORM,
 )
 
 app.include_router(users_router, tags=["User API"], prefix="/users")

@@ -1,7 +1,8 @@
+import re
 from typing import Literal, Optional, Annotated
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 default_portrait_url = '#'
 
@@ -12,11 +13,26 @@ EmailField = Annotated[str, Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")]
 class UserIn(BaseModel):
     username: str
     password: str
-    email: Optional[EmailField] = None
-    phone: ChinaPhone
+    email: str
+    phone: Optional[str] = None
     lang_pref: Literal['jp', 'fr', 'private'] = "private"
     portrait: str = default_portrait_url
 
+    code: str
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        if not re.match(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$", string=v):
+            raise HTTPException(status_code=400, detail="邮箱格式错误")
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v):
+        if not re.match(pattern=r"^1[3-9]\d{9}$", string=v):
+            raise HTTPException(status_code=400, detail="手机号格式错误")
+        return v
     # @field_validator('username')
     # @classmethod
     # def validate_username(cls, v):
@@ -75,12 +91,7 @@ class UserResetPhoneRequest(BaseModel):
     phone_number: ChinaPhone
 
 
-class UserDoesNotExistsError(HTTPException):
-    def __init__(self, message: str):
-        super().__init__(status_code=404, detail=message)
-
-
-class VerifyCodeRequest(BaseModel):
+class VerifyPhoneCodeRequest(BaseModel):
     code: str
     phone: ChinaPhone
 

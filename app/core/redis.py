@@ -9,7 +9,7 @@ redis_client: Optional[redis.Redis] = None
 async def init_redis():
     global redis_client
     if redis_client is None:
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="127.0.0.1",
             port=6379,
             decode_responses=True,  # 返回 str 而不是 Bytes

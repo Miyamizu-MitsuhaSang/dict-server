@@ -1,5 +1,6 @@
 import random
 import re
+from typing import Literal
 
 import bcrypt
 from fastapi import HTTPException
@@ -37,6 +38,11 @@ async def validate_password(password: str):
             status_code=400,
             detail=f"密码只能包含字母、数字和常见特殊字符 {allowed_specials}"
         )
+
+async def validate_email_exists(email: str):
+    user = await User.get_or_none(email=email)
+    if user:
+        raise HTTPException(status_code=400, detail="邮箱已经被使用，请更换其他邮箱后重试")
 
 
 # 登陆校验
@@ -79,7 +85,7 @@ async def save_code_redis(redis: Redis, phone: str, code: str, expire: int = 300
     await redis.setex(f"sms:{phone}", expire, code)
 
 
-async def varify_code(redis: Redis, phone: str, input_code: str):
+async def varify_phone_code(redis: Redis, phone: str, input_code: str):
     stored = await redis.get(f"sms:{phone}")
     return stored is not None and stored.decode() == input_code
 
@@ -89,16 +95,20 @@ async def save_email_code(redis: Redis, email: str, code: str, expire: int = 300
     await redis.setex(f"email:{email}", expire, code)
 
 
-async def send_email_code(redis: Redis, email: str, code: str):
+async def send_email_code(redis: Redis, email: str, code: str, ops_type: Literal["reg", "reset"]):
     await save_email_code(redis, email, code)
 
+    ops_dict = {
+        "reg" : "用户注册",
+        "reset" : "密码重置",
+    }
     subject = "Lexiverse 用户邮箱验证码"
     content = f"""
         <html>
           <body style="font-family: Arial, sans-serif; line-height:1.6;">
             <h2 style="color:#4CAF50;">Lexiverse 验证码</h2>
             <p>您好，</p>
-            <p>您正在进行 <b>密码重置</b> 操作。</p>
+            <p>您正在进行 <b>{ops_dict[ops_type]}</b> 操作。</p>
             <p>
               您的验证码是：
               <span style="font-size: 24px; font-weight: bold; color: #d9534f;">{code}</span>
@@ -115,7 +125,7 @@ async def send_email_code(redis: Redis, email: str, code: str):
     send_email(email, subject, content)
 
 
-async def __verify_email_code(redis: Redis, email: str, input_code: str) -> bool:
+async def verify_email_code(redis: Redis, email: str, input_code: str) -> bool:
     stored = await redis.getdel(f"email:{email}")
     if stored is None or stored != input_code:
         return False
@@ -135,7 +145,7 @@ async def __get_reset_token(redis: Redis, email: str):
 
 
 async def verify_and_get_reset_token(redis: Redis, email: str, input_code: str):
-    ok = await __verify_email_code(redis, email, input_code)
+    ok = await verify_email_code(redis, email, input_code)
     if not ok:
         return None
 

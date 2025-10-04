@@ -6,39 +6,68 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from jose import jwt
 
 from app.api.user.user_schemas import UserIn, UpdateUserRequest, UserLoginRequest, UserResetPhoneRequest, \
-    UserDoesNotExistsError, VerifyCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest
+    VerifyPhoneCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest
 from app.core.redis import get_redis
 from app.models.base import ReservedWords, User, Language
 from app.utils.security import get_current_user
 from settings import settings
 from . import service
-from .service import hash_password, send_email_code
 
 users_router = APIRouter()
 
 
 @users_router.post("/register")
-async def register(user_in: UserIn):
+async def register(req: Request, user_in: UserIn):
     await service.validate_username(user_in.username)
     await service.validate_password(user_in.password)
+    # await service.validate_email_exists(user_in.email)
+    result = await service.verify_email_code(
+        redis=req.app.state.redis,
+        email=user_in.email,
+        input_code=user_in.code
+    )
+    if not result:
+        raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
     hashed_pwd = service.hash_password(user_in.password)
 
     lang_pref = await Language.get(code=user_in.lang_pref)
 
-    new_user, created = await User.get_or_create(
+    encrypted_phone = (
+        req.app.state.phone_encrypto.encrypt(user_in.phone)) \
+        if user_in.phone else None
+
+    new_user = await User.create(
         name=user_in.username,
-        defaults={
-            "pwd_hashed": hashed_pwd,
-            "language": lang_pref,
-            "portrait": user_in.portrait, },
+        email=user_in.email,
+        pwd_hashed=hashed_pwd,
+        language=lang_pref,
+        encrypted_phone=encrypted_phone,
     )
-    if not created:
-        raise HTTPException(status_code=400, detail="Username already exists")
     return {
         "id": new_user.id,
         "message": "register success",
     }
+
+
+@users_router.post("/register/email_verify")
+async def register_email_verify(req: Request, user_email: UserResetEmailRequest):
+    await service.validate_email_exists(user_email.email)
+
+    code = service.generate_code()
+    redis = req.app.state.redis
+
+    await service.save_email_code(redis, email=user_email.email, code=code)
+    await service.send_email_code(
+        redis=redis,
+        email=user_email.email,
+        code=code,
+        ops_type="reg"
+    )
+
+    print(f"[DEBUG] 给 {user_email.email} 发送验证码：{code}")
+
+    return {"message": "验证码已发送"}
 
 
 @users_router.put("/update", deprecated=False)
@@ -62,7 +91,7 @@ async def user_modification(updated_user: UpdateUserRequest, current_user: User 
 
     # 修改密码（如果提供）
     if updated_user.new_password:
-        current_user.password_hash = hash_password(updated_user.new_password)
+        current_user.password_hash = service.hash_password(updated_user.new_password)
 
 
 @users_router.post("/login")
@@ -110,28 +139,19 @@ async def user_logout(request: Request,
     now = datetime.now(timezone.utc).timestamp()
     ttl = max(int(exp - now), 1) if exp else 7200
 
-    # try:
-    #     payload = jwt.decode(raw_token, SECRET_KEY, algorithms=["HS256"])
-    #     exp = payload.get("exp")
-    #     now = datetime.now(timezone.utc).timestamp()
-    #     ttl = int(exp - now) if exp else 7200 # Time To Live: 黑名单生效时长
-    # except ExpiredSignatureError:
-    #     raise HTTPException(status_code=401, detail="登录信息已过期")
-    # except JWTError:
-    #     raise HTTPException(status_code=401, detail="无效 token")
-
     await redis_client.setex(f"blacklist:{raw_token}", ttl, "true")
 
     return {"message": "logout ok"}
 
-#后续通过参数合并
+
+# 后续通过参数合并
 @users_router.post("/auth/forget-password/phone", deprecated=True)
 async def forget_password(request: Request, user_request: UserResetPhoneRequest):
     encrypted_phone = request.app.state.phone_encrypto.encrypt(phone=user_request.phone)
     user = await User.get_or_none(encrypted_phone=encrypted_phone)
 
     if not user:
-        raise UserDoesNotExistsError()
+        raise HTTPException(status_code=404, detail="User does not exists")
 
     redis = request.app.state.Redis
     code = service.generate_code()
@@ -147,7 +167,7 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
 # TODO 后续升级为防止爆破测试手机号的
 
 @users_router.post("/auth/varify_code", deprecated=True)
-async def varify_code(data: VerifyCodeRequest, request: Request):
+async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     redis = request.app.state.redis
     if not await service.varify_code(redis=redis, phone=data.phone, input_code=data.code):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
@@ -165,14 +185,14 @@ async def email_forget_password(request: Request, user_request: UserResetEmailRe
     user_email = user_request.email
     user = await User.get_or_none(email=user_email)
     if not user:
-        raise UserDoesNotExistsError("User does not exists")
+        raise HTTPException(status_code=404, detail="User does not exists")
 
     redis = request.app.state.redis
     code = service.generate_code()
-    await service.save_email_code(redis, email=user_request.email, code=code)
+    # await service.save_email_code(redis, email=user_request.email, code=code)
 
     # 邮箱服务
-    await send_email_code(redis, user_request.email, code)
+    await service.send_email_code(redis, user_request.email, code, ops_type="reset")
 
     print(f"[DEBUG] 给 {user_request.email} 发送验证码：{code}")
 
@@ -187,8 +207,9 @@ async def email_varify_code(request: Request, data: VerifyEmailRequest):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
     return {
-        "reset_token":  reset_token,
+        "reset_token": reset_token,
     }
+
 
 @users_router.post("/auth/reset-password", deprecated=False)
 async def reset_password(request: Request, reset_request: UserResetPasswordRequest):
@@ -199,9 +220,8 @@ async def reset_password(request: Request, reset_request: UserResetPasswordReque
     reset_token = request.headers.get("x-reset-token")
     user_id = await service.is_reset_password(redis=redis, token=reset_token)
 
-    new_password = hash_password(raw_password=reset_request.password)
+    new_password = service.hash_password(raw_password=reset_request.password)
 
     await User.filter(id=user_id).update(pwd_hashed=new_password)
 
     return {"massage": "密码重置成功"}
-

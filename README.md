@@ -24,6 +24,7 @@ Authorization: Bearer <your_jwt_token>
 ### 1. 用户认证模块 (`/users`)
 
 #### 1.1 用户注册
+##### 1.1.1 注册主接口
 
 - **接口**: `POST /users/register`
 - **描述**: 新用户注册
@@ -33,8 +34,11 @@ Authorization: Bearer <your_jwt_token>
 {
   "username": "string",
   "password": "string", 
+  "email": "EmailFields[string]",
+  "phone": "PhoneFields",
   "lang_pref": "jp" | "fr" | "private",
-  "portrait": "string"
+  "portrait": "string",
+  "code": "string"
 }
 ```
 
@@ -50,6 +54,30 @@ Authorization: Bearer <your_jwt_token>
 - **状态码**:
   - `200`: 注册成功
   - `400`: 参数验证失败
+
+##### 1.1.2 邮箱验证
+
+- **接口**: `POST /users/register/email_verify`
+- **描述**: 新用户注册时的邮箱验证
+- **请求体**:
+
+```json
+{
+  "user_email" : "string"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "message": "验证码已发送"
+}
+```
+
+- **状态码**:
+  - `200`: 邮件发送成功
+  - `400`: 邮箱已被使用
 
 #### 1.2 用户登录
 
@@ -119,6 +147,79 @@ Authorization: Bearer <your_jwt_token>
 - **状态码**:
   - `200`: 更新成功
   - `400`: 原密码错误或用户名为保留词
+
+#### 1.5 邮箱找回密码（发送验证码）
+
+- **接口**: `POST /users/auth/forget-password/email`  
+- **描述**: 用户请求通过邮箱找回密码时，向注册邮箱发送验证码  
+- **请求体**:
+
+```json
+{
+  "email": "string"
+}
+```
+
+
+- **响应**:
+
+```json
+{
+  "message": "验证码已发送"
+}
+```
+
+
+- **状态码**
+  - `200`: 更新成功
+  - `404`: 用户不存在
+
+#### 1.6 邮箱验证码验证
+
+- **接口**: `POST /users/auth/varify_code/email`  
+- **描述**: 用户输入邮箱验证码后，验证验证码是否有效，返回重置令牌  
+- **请求体**:
+```json
+{
+  "email": "string",
+  "code": "string"
+}
+```
+
+- **响应**
+```json
+{
+  "reset_token": "string"
+}
+```
+
+- **状态码**
+  - `200`: 验证码验证成功
+  - `400`: 验证码错误或已过期
+
+#### 1.7 重置密码
+
+- **接口**: `POST /users/auth/reset-password`  
+- **描述**: 用户通过邮箱验证码获得的重置令牌来设置新密码 
+- **请求头**: 
+  - `x-reset-token`: 重置令牌
+- **请求体**:
+```json
+{
+  "password": "string"
+}
+```
+
+- **响应**
+```json
+{
+  "massage": "密码重置成功"
+}
+```
+
+- **状态码**
+  - `200`: 密码重置成功
+  - `400`: 密码不合法或令牌无效
 
 ---
 
