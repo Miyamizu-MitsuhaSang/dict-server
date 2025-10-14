@@ -77,7 +77,8 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
         # 修改freq
         first_word = word_contents[0].word
         current_freq = first_word.freq
-        await first_word.update(freq=current_freq + 1)
+        first_word.freq = current_freq + 1
+        await first_word.save()
 
         pos_seen = set()
         pos_contents = []
@@ -111,7 +112,10 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
             raise HTTPException(status_code=404, detail="Word not found")
 
         first_def = word_content[0]
-        pos_list = await first_def.pos.all()
+        first_word = first_def.word
+        first_word.freq = first_word.freq + 1
+        await first_word.save()
+        pos_list = await first_def.pos
         pos_contents = [p.pos_type for p in pos_list]
 
         contents: List[SearchItemJp] = []
