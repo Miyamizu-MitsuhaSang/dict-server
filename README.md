@@ -554,7 +554,60 @@ art. - 冠词
 
 ---
 
-### 8. 使用示例
+### 8. AI助手模块 (`/ai_assist`)
+
+#### 8.1 词语智能问答
+
+- **接口**: `POST /ai_assist/exp`
+- **描述**: 针对指定词语，向AI助手提问相关问题，获取简洁自然的答案，适合初学者。
+- **需要认证**: 是
+- **请求体**:
+
+```json
+{
+  "word": "string",
+  "question": "string"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "word": "string",
+  "answer": "string",
+  "model": "string",
+  "tokens_used": "integer"
+}
+```
+
+- **状态码**:
+  - `200`: 问答成功
+  - `400`: 本月API使用量已超
+  - `500`: AI调用失败
+
+#### 8.2 清除词语聊天记录
+
+- **接口**: `POST /ai_assist/clear`
+- **描述**: 清除指定词语的AI助手聊天记录
+- **需要认证**: 是
+- **请求参数**:
+  - `word`: 词语 (string)
+
+- **响应**:
+
+```json
+{
+  "msg": "已清除 <word> 的聊天记录"
+}
+```
+
+- **状态码**:
+  - `200`: 清除成功
+
+---
+
+### 9. 使用示例
 
 #### 完整的API调用流程示例
 
@@ -597,6 +650,23 @@ curl -X POST "http://127.0.0.1:8000/translate" \
 
 # 5. 测试Redis连接
 curl -X GET "http://127.0.0.1:8000/ping-redis"
+
+# 6. 词语智能问答
+curl -X POST "http://127.0.0.1:8000/ai_assist/exp" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_token_here>" \
+  -d '{
+    "word": "法语",
+    "question": "什么是法语?"
+  }'
+
+# 7. 清除词语聊天记录
+curl -X POST "http://127.0.0.1:8000/ai_assist/clear" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_token_here>" \
+  -d '{
+    "word": "法语"
+  }'
 ```
 
 ---
