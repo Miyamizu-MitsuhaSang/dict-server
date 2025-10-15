@@ -71,7 +71,7 @@ async def register_email_verify(req: Request, user_email: UserResetEmailRequest)
 
 
 @users_router.put("/update", deprecated=False)
-async def user_modification(updated_user: UpdateUserRequest, current_user: User = Depends(get_current_user)):
+async def user_modification(updated_user: UpdateUserRequest, current_user: Tuple[User, Dict] = Depends(get_current_user)):
     """
 
     :param updated_user: Pydantic 模型验证修改内容（根据JSON内容修改对应字段）
@@ -169,7 +169,7 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
 @users_router.post("/auth/varify_code", deprecated=True)
 async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     redis = request.app.state.redis
-    if not await service.varify_code(redis=redis, phone=data.phone, input_code=data.code):
+    if not await service.verify_code(redis=redis, phone=data.phone, input_code=data.code):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
     return {"message": "验证成功，可以重置密码"}
 

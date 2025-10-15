@@ -30,6 +30,7 @@ class User(Model):
     encrypted_phone = fields.CharField(max_length=11, description="用户手机号", null=True)
     language = fields.ForeignKeyField("models.Language", related_name="users", on_delete=fields.CASCADE)
     is_admin = fields.BooleanField(default=False, description="管理员权限")
+    token_usage = fields.IntField(default=0, description="AI答疑使用量")
 
     class Meta:
         table = "users"

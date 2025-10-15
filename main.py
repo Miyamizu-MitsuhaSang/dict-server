@@ -7,6 +7,7 @@ from tortoise.contrib.fastapi import register_tortoise
 
 import app.models.signals
 from app.api.admin.router import admin_router
+from app.api.ai_assist.routes import ai_router
 from app.api.redis_test import redis_test_router
 from app.api.search import dict_search
 from app.api.translator import translator_router
@@ -51,6 +52,8 @@ app.include_router(dict_search, tags=["Dictionary Search API"])
 app.include_router(redis_test_router, tags=["Redis Test-Only API"])
 
 app.include_router(translator_router, tags=["Translation API"])
+
+app.include_router(ai_router, tags=["AI Assist API"], prefix="/ai_assist")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
