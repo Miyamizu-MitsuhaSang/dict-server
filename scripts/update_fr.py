@@ -5,11 +5,9 @@ from tkinter.scrolledtext import example
 import pandas as pd
 from tortoise import Tortoise, connections
 from tortoise.exceptions import MultipleObjectsReturned
-from fastapi import UploadFile
 
 from app.models.fr import DefinitionFr, WordlistFr
 from settings import TORTOISE_ORM
-import app.models.signals
 
 xlsx_name = "./DictTable_20250811.xlsx"
 xlsx_path = Path(xlsx_name)
@@ -68,7 +66,7 @@ async def import_def_fr(
         example = None if pd.isna(row.法语例句1) else str(row.法语例句1).strip()
         pos = None if pd.isna(row.词性1) else pos_process(str(row.词性1).strip())
         eng_exp = None if pd.isna(row.英语释义1) else str(row.英语释义1).strip()
-        chi_exp = str(row[2]).strip()
+        chi_exp = str(row[3]).strip()
 
         # 去重：同一个词条不能有重复释义（同 pos + meaning）
         exists = await DefinitionFr.filter(

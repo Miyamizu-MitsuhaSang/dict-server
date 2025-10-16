@@ -8,6 +8,7 @@ class CommentFr(Model):
     comment_word = fields.ForeignKeyField("models.WordlistFr", related_name="comments_fr")
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
+    supervised = fields.BooleanField(default=False)
 
     class Meta:
         table = "comments_fr"

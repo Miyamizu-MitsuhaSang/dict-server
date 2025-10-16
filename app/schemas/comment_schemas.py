@@ -1,5 +1,4 @@
 from typing import List, Tuple
-from typing import Literal
 
 from pydantic import BaseModel
 
@@ -22,7 +21,7 @@ class CommentSet(BaseModel):
 class CommentUpload(BaseModel):
     comment_word: str
     comment_content: str
-    lang: Literal["fr", "jp"]
+    # lang: Literal["fr", "jp"]
 
     class Config:
         from_attributes = True

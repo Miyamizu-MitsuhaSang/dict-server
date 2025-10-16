@@ -1,9 +1,5 @@
-from enum import Enum
-
-import pandas as pd
-from tortoise.models import Model
 from tortoise import fields
-from typing import Tuple, Type, TypeVar
+from tortoise.models import Model
 
 from app.schemas.admin_schemas import PosEnumFr
 
