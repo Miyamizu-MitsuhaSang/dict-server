@@ -2,9 +2,9 @@ from typing import Literal, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.api.word_comment.word_comment_schemas import CommentSet
 from app.models import DefinitionJp, CommentFr, CommentJp
 from app.models.fr import DefinitionFr
-from app.schemas.comment_schemas import CommentSet
 from app.schemas.search_schemas import SearchRequest, SearchResponse, SearchItemFr, SearchItemJp
 from app.utils.all_kana import all_in_kana
 from app.utils.autocomplete import suggest_autocomplete
@@ -147,3 +147,5 @@ async def search_list(query_word: SearchRequest, user=Depends(get_current_user))
     print(query_word.query, query_word.language, query_word.sort, query_word.order)
     word_contents = await suggest_autocomplete(query=query_word)
     return {"list": word_contents}
+
+#TODO 用户搜索历史

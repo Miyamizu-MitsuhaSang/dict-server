@@ -8,6 +8,8 @@ from tortoise.contrib.fastapi import register_tortoise
 import app.models.signals
 from app.api.admin.router import admin_router
 from app.api.ai_assist.routes import ai_router
+from app.api.make_comments.routes import comment_router
+from app.api.pronounciation_test.routes import pron_test_router
 from app.api.redis_test import redis_test_router
 from app.api.search import dict_search
 from app.api.translator import translator_router
@@ -15,7 +17,7 @@ from app.api.user.routes import users_router
 from app.api.word_comment.routes import word_comment_router
 from app.core.redis import init_redis, close_redis
 from app.utils.phone_encrypt import PhoneEncrypt
-from settings import ONLINE_SETTINGS
+from settings import TORTOISE_ORM
 
 
 @asynccontextmanager
@@ -43,7 +45,7 @@ app.add_middleware(
 
 register_tortoise(
     app=app,
-    config=ONLINE_SETTINGS,
+    config=TORTOISE_ORM,
 )
 
 app.include_router(users_router, tags=["User API"], prefix="/users")
@@ -56,7 +58,11 @@ app.include_router(translator_router, tags=["Translation API"])
 
 app.include_router(ai_router, tags=["AI Assist API"], prefix="/ai_assist")
 
+app.include_router(comment_router, tags=["Comment API"])
+
 app.include_router(word_comment_router, tags=["Word Comment API"], prefix="/comment/word")
+
+app.include_router(pron_test_router, tags=["Pron Test API"], prefix="/test")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

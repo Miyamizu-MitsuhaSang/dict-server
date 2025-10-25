@@ -11,7 +11,7 @@ from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
 
 
-async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[Tuple[str, str]]:
+async def suggest_autocomplete(query: SearchRequest, limit: int = 10):
     """
 
     :param query: 当前用户输入的内容
@@ -22,7 +22,7 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[Tu
         query_word = normalize_text(query.query)
         exact = await (
             WordlistFr
-            .get_or_none(text=query.query)
+            .get_or_none(search_text=query.query)
             .values("text", "freq")
         )
         if exact:
@@ -33,7 +33,7 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[Tu
         qs_prefix = (
             WordlistFr
             .filter(Q(search_text__startswith=query_word) | Q(text__startswith=query.query))
-            .exclude(text=query.query)
+            .exclude(search_text=query.query)
             .only("text", "freq")
         )
         prefix_objs = await qs_prefix[:limit]
@@ -52,6 +52,17 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[Tu
             )
             contains_objs = await qs_contain[: need * 2]
             contains = [(o.text, o.freq) for o in contains_objs]
+
+            seen_text, out = set(), []
+            for text, freq in list(exact_word) + list(prefix) + list(contains):
+                key = text
+                if key not in seen_text:
+                    seen_text.add(key)
+                    out.append((text, freq))
+                if len(out) >= limit:
+                    break
+            out = sorted(out, key=lambda w: (-w[2], len(w[0]), w[0]))
+            return [text for text, _ in out]
 
     else:
         query_word = all_in_kana(query.query)
@@ -89,16 +100,16 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10) -> List[Tu
             contains_objs = qs_contain[:need * 2]
             contains: List[Tuple[str, str, int]] = [(o.text, o.hiragana, o.freq) for o in contains_objs]
 
-    seen_text, out = set(), []
-    for text, hiragana, freq in list(exact_word) + list(prefix) + list(contains):
-        key = (text, hiragana)
-        if key not in seen_text:
-            seen_text.add(key)
-            out.append((text, hiragana, freq))
-        if len(out) >= limit:
-            break
-    out = sorted(out, key=lambda w: (-w[2], len(w[0]), w[0]))
-    return [(text, hiragana) for text, hiragana, _ in out]
+        seen_text, out = set(), []
+        for text, hiragana, freq in list(exact_word) + list(prefix) + list(contains):
+            key = (text, hiragana)
+            if key not in seen_text:
+                seen_text.add(key)
+                out.append((text, hiragana, freq))
+            if len(out) >= limit:
+                break
+        out = sorted(out, key=lambda w: (-w[2], len(w[0]), w[0]))
+        return [(text, hiragana) for text, hiragana, _ in out]
 
 
 async def __test():

@@ -20,16 +20,17 @@ MAX_USAGE_PER = 100
 CHAT_TTL = 7200
 
 
-@ai_router.post("/exp")
+@ai_router.post("/word/exp", deprecated=False)
 async def dict_exp(
         request: Request,
         Q: AIQuestionRequest,
         user: Tuple[User, Dict] = Depends(get_current_user)
 ):
     """
-
-    :param word:
-    :param question: 不允许question为空调用
+    该接口仅用于查词页面且为具有MCP功能的
+    :param request:
+    :param Q:
+    :param user:
     :return:
     """
     if user[0].token_usage > CHAT_TTL and not user[0].is_admin:
@@ -93,6 +94,11 @@ async def dict_exp(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI调用失败: {str(e)}")
+
+
+@ai_router.post("/univer")
+async def universal_main():
+    pass
 
 
 @ai_router.post("/clear")

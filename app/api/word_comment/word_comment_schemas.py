@@ -22,6 +22,3 @@ class CommentUpload(BaseModel):
     comment_word: str
     comment_content: str
     # lang: Literal["fr", "jp"]
-
-    class Config:
-        from_attributes = True

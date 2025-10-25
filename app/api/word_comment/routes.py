@@ -2,8 +2,8 @@ from typing import Literal, Tuple
 
 from fastapi import APIRouter, Depends
 
+from app.api.word_comment.word_comment_schemas import CommentUpload
 from app.models import User, CommentFr, CommentJp
-from app.schemas.comment_schemas import CommentUpload
 from app.utils.security import get_current_user
 
 word_comment_router = APIRouter()
