@@ -1,4 +1,10 @@
+from pathlib import Path
+
 from pydantic.v1 import BaseSettings
+
+# 计算项目根目录：假设 settings.py 位于 dict_server/settings.py
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR  # 如果 settings.py 就在根目录，否则改成 BASE_DIR.parent
 
 TORTOISE_ORM = {
     'connections': {
@@ -51,8 +57,25 @@ class Settings(BaseSettings):
     BAIDU_APPKEY: str
     REDIS_URL: str
 
+    AES_SECRET_KEY: str
+
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASS: str
+    SMTP_SENDER_NAME: str
+
+    RESET_SECRET_KEY: str
+
+    AI_ASSIST_KEY: str
+
+    ECNU_TEACH_AI_KEY: str
+
+    AZURE_SUBSCRIPTION_KEY: str
+
     class Config:
-        env_file = '.env'
+        env_file = ROOT_DIR / '.env'
+        case_sensitive = False
 
 
 settings = Settings()

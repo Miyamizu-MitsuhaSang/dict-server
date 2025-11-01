@@ -1,14 +1,91 @@
 import asyncio
-from typing import List, Literal, Tuple
+import re
+from typing import List, Tuple, Dict, Literal
 
+from fastapi import HTTPException
 from tortoise import Tortoise
 from tortoise.expressions import Q
 
-from app.api.search_dict.search_schemas import SearchRequest
+from app.api.search_dict.search_schemas import SearchRequest, ProverbSearchResponse, ProverbSearchRequest
 from app.models import WordlistFr, WordlistJp
+from app.models.fr import ProverbFr
 from app.utils.all_kana import all_in_kana
 from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
+
+
+def contains_chinese(text: str) -> bool:
+    """判断字符串中是否包含至少一个中文字符"""
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
+
+async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
+    proverb = await ProverbFr.get_or_none(id=proverb_id)
+    if not proverb:
+        raise HTTPException(status_code=404, detail="Proverb not found")
+    return ProverbSearchResponse(
+        proverb_text=proverb.proverb,
+        chi_exp=proverb.chi_exp,
+    )
+
+
+async def suggest_proverb(query: ProverbSearchRequest, lang: Literal['fr', 'zh']) -> List[Dict[str, str]]:
+    """
+     对法语谚语表进行搜索建议。
+    参数:
+        query.query: 搜索关键词
+        lang: 'fr' 或 'zh'
+    逻辑:
+        1. 若 lang='fr'，按谚语字段 (proverb) 搜索；
+        2. 若 lang='zh'，按中文释义字段 (chi_exp) 搜索；
+        3. 优先以输入开头的匹配；
+        4. 其次为包含输入但不以其开头的匹配（按 freq 排序）。
+    :return: [{'id': 1, 'proverb': 'xxx'}, ...]
+    """
+    keyword = query.query.strip()
+    results: List[Dict[str, str]] = []
+
+    if not keyword:
+        return results
+
+    # ✅ 根据语言决定搜索字段
+    if lang == "zh":
+        startswith_field = "chi_exp__istartswith"
+        contains_field = "chi_exp__icontains"
+    else:  # 默认法语
+        startswith_field = "proverb__istartswith"
+        contains_field = "proverb__icontains"
+
+    # ✅ 1. 开头匹配
+    start_matches = await (
+        ProverbFr.filter(**{startswith_field: keyword})
+        .order_by("-freq")
+        .limit(10)
+        .values("id", "proverb", "chi_exp")
+    )
+
+    # ✅ 2. 包含匹配（但不是开头）
+    contain_matches = await (
+        ProverbFr.filter(
+            Q(**{contains_field: keyword}) & ~Q(**{startswith_field: keyword})
+        )
+        .order_by("-freq")
+        .limit(10)
+        .values("id", "proverb", "chi_exp")
+    )
+
+    # ✅ 合并结果（去重并保持顺序）
+    seen_ids = set()
+    for row in start_matches + contain_matches:
+        if row["id"] not in seen_ids:
+            seen_ids.add(row["id"])
+            results.append({
+                "id": row["id"],
+                "proverb": row["proverb"],
+                "chi_exp": row["chi_exp"]
+            })
+
+    return results
 
 
 async def suggest_autocomplete(query: SearchRequest, limit: int = 10):
@@ -113,9 +190,13 @@ async def suggest_autocomplete(query: SearchRequest, limit: int = 10):
 
 
 async def __test():
-    query_word: str = '愛'
-    language: Literal['fr', 'jp'] = 'jp'
-    return await suggest_autocomplete(SearchRequest(query=query_word, language=language))
+    query_word: str = '棋逢'
+    return await (
+        suggest_proverb(
+            query=ProverbSearchRequest(query=query_word),
+            lang='zh'
+        )
+    )
 
 
 async def __main():

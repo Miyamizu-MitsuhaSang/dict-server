@@ -1,6 +1,5 @@
 import asyncio
 from pathlib import Path
-from tkinter.scrolledtext import example
 
 import pandas as pd
 from tortoise import Tortoise, connections

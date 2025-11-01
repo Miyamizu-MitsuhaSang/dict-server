@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from enum import Enum
-from app.schemas.admin_schemas import PosEnumJp
+from typing import Tuple, TypeVar
 
 import pandas as pd
-from tortoise.exceptions import DoesNotExist, MultipleObjectsReturned
-from tortoise.models import Model
 from tortoise import fields
-from typing import Tuple, TYPE_CHECKING, TypeVar, Type, Optional
+from tortoise.exceptions import DoesNotExist
+from tortoise.models import Model
+
+from app.schemas.admin_schemas import PosEnumJp
 
 sheet_name_jp = "日汉释义"
 
@@ -80,3 +80,10 @@ class PosType(Model):
 
     class Meta:
         table = "pos_type"
+
+class PronunciationTestJp(Model):
+    id = fields.IntField(pk=True)
+    text = fields.TextField(description="朗读文段")
+
+    class Meta:
+        table = "pronunciationtest_jp"

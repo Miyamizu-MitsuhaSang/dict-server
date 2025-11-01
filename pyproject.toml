@@ -66,3 +66,7 @@ dependencies = [
 tortoise_orm = "settings.TORTOISE_ORM"
 location = "./migrations"
 src_folder = "./."
+
+[tool.uv.sources]
+[tool.uv.sources.default]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"

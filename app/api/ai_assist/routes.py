@@ -33,7 +33,7 @@ async def dict_exp(
     :param user:
     :return:
     """
-    if user[0].token_usage > CHAT_TTL and not user[0].is_admin:
+    if user[0].token_usage > MAX_USAGE_PER and not user[0].is_admin:
         raise HTTPException(status_code=400, detail="本月API使用量已超")
 
     redis = request.app.state.redis
@@ -104,6 +104,6 @@ async def universal_main():
 @ai_router.post("/clear")
 async def clear_history(word: str, request: Request, user: Tuple[User, Dict] = Depends(get_current_user)):
     redis = request.app.state.redis
-    user_id = user[0].id
+    user_id = str(user[0].id)
     await clear_chat_history(redis, user_id, word)
     return {"msg": f"已清除 {word} 的聊天记录"}

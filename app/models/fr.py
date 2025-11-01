@@ -13,6 +13,7 @@ class WordlistFr(Model):
     attachments: fields.ReverseRelation["AttachmentFr"]
     freq = fields.IntField(default=0)  # 词频排序用
     search_text = fields.CharField(max_length=255, index=True)  # 检索字段
+    proverb = fields.ManyToManyField("models.ProverbFr", related_name="wordlists")
 
     # attachment = fields.ForeignKeyField("models.Attachment", related_name="wordlists", on_delete=fields.CASCADE)
     # source = fields.CharField(max_length=20, description="<UNK>", null=True)
@@ -41,3 +42,21 @@ class DefinitionFr(Model):
     example_varification = fields.BooleanField(default=False, description="例句是否审核")
     class Meta:
         table = "definitions_fr"
+
+class ProverbFr(Model):
+    id = fields.IntField(pk=True)
+    proverb = fields.TextField(description="法语谚语及常用表达")
+    chi_exp = fields.TextField(description="中文释义")
+    freq = fields.IntField(default=0)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "proverb_fr"
+
+class PronunciationTestFr(Model):
+    id = fields.IntField(pk=True)
+    text = fields.TextField(description="朗读文段")
+
+    class Meta:
+        table = "pronunciationtest_fr"

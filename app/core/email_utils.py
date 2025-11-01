@@ -64,6 +64,5 @@ def main(receiver: str, code: int = 123456):
 
 if __name__ == '__main__':
     xza = "3480039769@qq.com"
-    bb = "1530799205@qq.com"
     me = "GodricTan@gmail.com"
     main(xza, code=123833)

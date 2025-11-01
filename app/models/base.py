@@ -49,3 +49,22 @@ class Language(Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=30, unique=True)  # e.g. "Japanese"
     code = fields.CharField(max_length=10, unique=True)  # e.g. "ja", "fr", "zh"
+
+class UserTestRecord(Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="test_records")
+    username = fields.CharField(max_length=20)
+
+    language = fields.CharField(max_length=10)
+    total_sentences = fields.IntField()
+    average_score = fields.FloatField()
+    accuracy_score = fields.FloatField()
+    fluency_score = fields.FloatField()
+    completeness_score = fields.FloatField()
+    level = fields.CharField(max_length=20)
+
+    raw_result = fields.JSONField()  # 或 TextField 存 JSON 字符串
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "user_test_record"

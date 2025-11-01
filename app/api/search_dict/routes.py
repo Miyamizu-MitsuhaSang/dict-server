@@ -2,12 +2,14 @@ from typing import Literal, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.api.search_dict import service
+from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
+    ProverbSearchRequest
+from app.api.search_dict.service import suggest_autocomplete
 from app.api.word_comment.word_comment_schemas import CommentSet
 from app.models import DefinitionJp, CommentFr, CommentJp
 from app.models.fr import DefinitionFr
-from app.schemas.search_schemas import SearchRequest, SearchResponse, SearchItemFr, SearchItemJp
 from app.utils.all_kana import all_in_kana
-from app.utils.autocomplete import suggest_autocomplete
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
 
@@ -54,7 +56,7 @@ async def __get_comments(
         return commentlist
 
 
-@dict_search.post("/search", response_model=SearchResponse)
+@dict_search.post("/search/word", response_model=WordSearchResponse)
 async def search(request: Request, body: SearchRequest, user=Depends(get_current_user)):
     """
     精确搜索
@@ -96,7 +98,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
                     eng_explanation=wc.eng_explanation,
                 )
             )
-        return SearchResponse(
+        return WordSearchResponse(
             query=query,
             pos=pos_contents,
             contents=contents,
@@ -126,26 +128,44 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
                     example=wc.example,
                 )
             )
-        return SearchResponse(
+        return WordSearchResponse(
             query=query,
             pos=pos_contents,
             contents=contents,
         )
 
 
+@dict_search.post("/search/proverb")
+async def proverb(request: Request, proverb_id: int, user=Depends(get_current_user)):
+    """
+    用于法语谚语搜索
+    :param request:
+    :param body: 要求用户输入的内容必须为法语
+    :param user:
+    :return:
+    """
+    content = await service.accurate_proverb(proverb_id=proverb_id)
+    return content
+
+
 # TODO 相关度排序（转换为模糊匹配）
 # TODO 输入搜索框时反馈内容
 
-@dict_search.post("/search/list")
-async def search_list(query_word: SearchRequest, user=Depends(get_current_user)):
+@dict_search.post("/search/word/list")
+async def search_word_list(query_word: SearchRequest, user=Depends(get_current_user)):
     """
     检索时的提示接口
     :param query_word: 用户输入的内容
     :param user:
     :return: 待选列表
     """
-    print(query_word.query, query_word.language, query_word.sort, query_word.order)
+    # print(query_word.query, query_word.language, query_word.sort, query_word.order)
     word_contents = await suggest_autocomplete(query=query_word)
     return {"list": word_contents}
 
-#TODO 用户搜索历史
+
+@dict_search.post("/search/proverb/list")
+async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
+    lang: Literal['fr', 'zh'] = 'zh' if service.contains_chinese(query_word.query) else 'fr'
+    suggest_proverbs = await service.suggest_proverb(query=query_word, lang=lang)
+    return {"list": suggest_proverbs}

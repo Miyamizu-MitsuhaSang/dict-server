@@ -2,7 +2,6 @@ from typing import Literal, List, Union, Optional
 
 from pydantic import BaseModel
 
-from app.models import PosType
 from app.schemas.admin_schemas import PosEnumFr
 
 
@@ -11,6 +10,10 @@ class SearchRequest(BaseModel):
     language: Literal['fr', 'jp']
     sort: Literal['relevance', 'date'] = 'date'
     order: Literal['asc', 'des'] = 'des'
+
+class ProverbSearchRequest(BaseModel):
+    query: str
+    language: Literal['fr', 'jp'] = "fr"
 
 
 class SearchItemJp(BaseModel):
@@ -25,7 +28,12 @@ class SearchItemFr(BaseModel):
     example: Optional[str]
 
 
-class SearchResponse(BaseModel):
+class WordSearchResponse(BaseModel):
     query: str
     pos: list
     contents: Union[List[SearchItemFr], List[SearchItemJp]]
+
+
+class ProverbSearchResponse(BaseModel):
+    proverb_text: str
+    chi_exp: str

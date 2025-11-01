@@ -1,10 +1,9 @@
+import json
+import random
 from typing import Tuple, Dict
 
-import redis.asyncio as redis_asyncio
 import httpx
-import random
-import json
-
+import redis.asyncio as redis_asyncio
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models import User
@@ -115,7 +114,7 @@ async def rate_limiter(
         raise HTTPException(status_code=429, detail=f"Too many requests")
 
 
-@translator_router.post('/translate', response_model=TransResponse)
+@translator_router.post('/translate', response_model=TransResponse, dependencies=[Depends(rate_limiter)])
 async def translate(
         translate_request: TransRequest,
         user=Depends(get_current_user)

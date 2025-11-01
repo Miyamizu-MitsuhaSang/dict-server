@@ -63,7 +63,7 @@ Authorization: Bearer <your_jwt_token>
 
 ```json
 {
-  "user_email" : "string"
+  "email" : "string"
 }
 ```
 
@@ -221,53 +221,106 @@ Authorization: Bearer <your_jwt_token>
   - `200`: 密码重置成功
   - `400`: 密码不合法或令牌无效
 
+#### 1.8 手机找回密码（已废弃）
+
+> **说明**: 该接口仍在服务端保留，但已不再推荐使用，后续版本可能会移除。
+
+- **接口**: `POST /users/auth/forget-password/phone`
+- **描述**: 通过手机号码请求验证码以找回密码
+- **请求体**:
+
+```json
+{
+  "phone_number": "string"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "message": "验证码已发送"
+}
+```
+
+- **状态码**:
+  - `200`: 发送成功
+  - `404`: 手机号未注册
+
+#### 1.9 手机验证码验证（已废弃）
+
+> **说明**: 该接口与 1.8 配合使用，已不再推荐使用。
+
+- **接口**: `POST /users/auth/varify_code`
+- **描述**: 校验短信验证码是否有效
+- **请求体**:
+
+```json
+{
+  "phone": "string",
+  "code": "string"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "message": "验证成功，可以重置密码"
+}
+```
+
+- **状态码**:
+  - `200`: 验证成功
+  - `400`: 验证码错误或已过期
+
 ---
 
-### 2. 词典搜索模块
+### 2. 词典搜索模块 (`Dictionary Search API`)
 
-#### 2.1 词典搜索
+#### 2.1 单词精确搜索
 
-- **接口**: `POST /search`
-- **描述**: 根据关键词搜索词典内容
+- **接口**: `POST /search/word`
+- **描述**: 根据语言精确查询词条，自动累计词频并返回按词性分组的释义。
 - **需要认证**: 是
 - **请求体**:
 
 ```json
 {
-  "query": "string",
-  "language": "fr" | "jp",
-  "sort": "relevance" | "date",
-  "order": "asc" | "des"
+  "query": "bonjour",
+  "language": "fr",
+  "sort": "relevance",
+  "order": "des"
 }
 ```
 
-- **法语响应示例**:
+- **法语响应示例** (`language = fr`):
 
 ```json
 {
-  "query": "string",
-  "pos": ["n.m.", "v.t."],
+  "query": "bonjour",
+  "pos": ["n.m."],
   "contents": [
     {
       "pos": "n.m.",
-      "chi_exp": "中文解释",
-      "eng_explanation": "English explanation", 
-      "example": "例句"
+      "chi_exp": "问候语；用于见面时打招呼",
+      "eng_explanation": "greeting; hello",
+      "example": "Bonjour, comment ça va ?"
     }
   ]
 }
 ```
 
-- **日语响应示例**:
+- **日语响应示例** (`language = jp`):
 
 ```json
 {
-  "query": "string", 
-  "pos": ["名词", "动词"],
+  "query": "日本語",
+  "pos": ["名词"],
   "contents": [
     {
-      "chi_exp": "中文解释",
-      "example": "例句"
+      "chi_exp": "日语；日本的语言",
+      "example": "日本語を勉強しています。"
     }
   ]
 }
@@ -278,17 +331,77 @@ Authorization: Bearer <your_jwt_token>
   - `404`: 未找到词条
   - `401`: 未授权
 
-#### 2.2 搜索建议
+#### 2.2 法语谚语详情
 
-- **接口**: `POST /search/list`
-- **描述**: 获取搜索自动完成建议
+- **接口**: `POST /search/proverb`
+- **描述**: 通过谚语ID获取法语谚语原文与中文解释。
+- **需要认证**: 是
+- **查询参数**:
+  - `proverb_id`: 谚语ID (integer)
+- **响应**:
+
+```json
+{
+  "proverb_text": "Petit à petit, l'oiseau fait son nid.",
+  "chi_exp": "循序渐进才能取得成功。"
+}
+```
+
+- **状态码**:
+  - `200`: 查询成功
+  - `404`: 谚语不存在
+
+#### 2.3 单词联想建议
+
+- **接口**: `POST /search/word/list`
+- **描述**: 根据用户输入返回单词联想列表，含前缀匹配与包含匹配。
 - **需要认证**: 是
 - **请求体**:
 
 ```json
 {
-  "query": "string",
-  "language": "fr" | "jp"
+  "query": "bon",
+  "language": "fr",
+  "sort": "relevance",
+  "order": "des"
+}
+```
+
+- **响应示例**:
+
+```json
+{
+  "list": ["bonjour", "bonsoir", "bonheur"]
+}
+```
+
+> **说明**: `language = "jp"` 时返回形如 `[["愛", "あい"], ["愛する", "あいする"]]` 的二维数组，第二列为假名读音。
+
+#### 2.4 谚语联想建议
+
+- **接口**: `POST /search/proverb/list`
+- **描述**: 按输入内容（自动识别法语或中文）返回谚语候选列表。
+- **需要认证**: 是
+- **请求体**:
+
+```json
+{
+  "query": "慢",
+  "language": "fr"
+}
+```
+
+- **响应示例**:
+
+```json
+{
+  "list": [
+    {
+      "id": 12,
+      "proverb": "Rien ne sert de courir, il faut partir à point.",
+      "chi_exp": "做事要循序渐进，贵在及时出发。"
+    }
+  ]
 }
 ```
 
@@ -358,7 +471,12 @@ Authorization: Bearer <your_jwt_token>
 
 ```json
 {
-  "pong": true
+  "pong": true,
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "db": 0
+  }
 }
 ```
 
@@ -508,9 +626,291 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 6. 数据模型
+### 6. 用户反馈模块 (`/improvements`)
 
-#### 6.1 法语词性枚举
+#### 6.1 提交用户反馈
+
+- **接口**: `POST /improvements`
+- **描述**: 登录用户提交产品改进或问题反馈，系统会向预设邮箱发送通知。
+- **需要认证**: 是
+- **请求体**:
+
+```json
+{
+  "report_part": "string",
+  "text": "string"
+}
+```
+
+- **字段说明**:
+  - `report_part`: 反馈类别，可选值 `ui_design`, `dict_fr`, `dict_jp`, `user`, `translate`, `writting`, `ai_assist`, `pronounce`（`comment_api_test` 仅用于内部测试）
+  - `text`: 反馈正文，不能为空
+
+- **响应**:
+
+```json
+{
+  "massages": "feedback succeed"
+}
+```
+
+- **状态码**:
+  - `200`: 提交成功
+  - `422`: 字段校验失败（不合法的类别或空文本）
+
+---
+
+### 7. 词条评论模块 (`/comment/word`)
+
+#### 7.1 新增词条评论
+
+- **接口**: `POST /comment/word/{lang}`
+- **描述**: 为指定语言的词条添加用户评论
+- **需要认证**: 是
+- **路径参数**:
+  - `lang`: `fr` 或 `jp`
+- **请求体**:
+
+```json
+{
+  "comment_word": "string",
+  "comment_content": "string"
+}
+```
+
+- **响应**: 创建成功时返回 `200`，响应体为空。
+- **状态码**:
+  - `200`: 创建成功
+  - `422`: 字段校验失败
+
+---
+
+### 8. 作文指导模块 (`/article-director`)
+
+#### 8.1 作文批改会话
+
+- **接口**: `POST /article-director/article`
+- **描述**: 将学生作文（文本形式）提交给 EduChat 模型获取结构化点评，会话上下文保存在 Redis 中。
+- **需要认证**: 是
+- **查询参数**:
+  - `lang`: 作文语种，默认 `fr-FR`，可选值 `fr-FR`（法语）、`ja-JP`（日语）、`en-US`（英文）
+- **请求体**:
+
+```json
+{
+  "title_content": "我的作文全文......",
+  "article_type": "议论文"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "reply": "整体点评内容……",
+  "tokens": 1834,
+  "conversation_length": 3
+}
+```
+
+- **状态码**:
+  - `200`: 批改成功
+  - `401`: 未授权
+
+> **提示**: 每次调用批改/追问接口之后，前端应根据需要调用重置接口清空 Redis 中的上下文。
+
+#### 8.2 作文追问
+
+- **接口**: `POST /article-director/question`
+- **描述**: 在现有作文会话上追加提问，获取针对性回复。
+- **需要认证**: 是
+- **请求体**:
+
+```json
+{
+  "query": "请给出第三段的改写示例"
+}
+```
+
+- **响应**:
+
+```json
+{
+  "reply": "改写建议……",
+  "tokens": 924,
+  "conversation_length": 5
+}
+```
+
+- **状态码**:
+  - `200`: 追问成功
+  - `401`: 未授权
+
+#### 8.3 重置作文会话
+
+- **接口**: `POST /article-director/reset`
+- **描述**: 清除当前用户在 Redis 中的作文指导上下文，确保下一次批改从头开始。
+- **需要认证**: 是
+- **响应**:
+
+```json
+{
+  "message": "已重置用户 <user_id> 的作文对话记录"
+}
+```
+
+---
+
+### 9. 发音测评模块 (`/test/pron`)
+
+#### 9.1 开始/恢复测评
+
+- **接口**: `GET /test/pron/start`
+- **描述**: 为当前用户新建或恢复发音测评会话，默认随机抽取20句目标语言的测评文本。
+- **需要认证**: 是
+- **查询参数**:
+  - `count`: 抽题数量 (integer，默认 `20`)
+  - `lang`: 语种代码，支持 `fr-FR`（法语）、`ja-JP`（日语），默认 `fr-FR`
+- **响应**:
+
+```json
+{
+  "ok": true,
+  "resumed": false,
+  "message": "New fr-FR test started",
+  "session": {
+    "lang": "fr-FR",
+    "current_index": 0,
+    "sentence_ids": [12, 45, 87],
+    "total": 3
+  }
+}
+```
+
+- **状态码**:
+  - `200`: 成功创建或恢复会话
+  - `400`: 不支持的语言参数
+  - `404`: 题库为空
+
+#### 9.2 提交语音测评
+
+- **接口**: `POST /test/pron/sentence_test`
+- **描述**: 上传 `.wav` 录音进行发音测评，服务端自动转换格式并调用 Azure Speech 评分。
+- **需要认证**: 是
+- **请求类型**: `multipart/form-data`
+- **表单字段**:
+  - `record`: 上传的音频文件（仅支持 `.wav`）
+  - `lang`: 语种代码，默认 `fr-FR`
+- **响应示例**:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "ok": true,
+    "recognized_text": "Bonjour tout le monde",
+    "overall_score": 84.5,
+    "accuracy": 82.0,
+    "fluency": 86.0,
+    "completeness": 85.0,
+    "progress": "3/10"
+  }
+}
+```
+
+- **状态码**:
+  - `200`: 评分成功（若全部句子完成，会自动结束会话）
+  - `400`: 会话不存在或音频转换失败
+  - `404`: 对应题目不存在
+  - `415`: 音频格式不符合要求
+
+#### 9.3 查询当前题目
+
+- **接口**: `GET /test/pron/current_sentence`
+- **描述**: 返回当前需要朗读的句子。
+- **需要认证**: 是
+- **响应**:
+
+```json
+{
+  "ok": true,
+  "index": 2,
+  "current_sentence": "Bonjour tout le monde"
+}
+```
+
+- **状态码**:
+  - `200`: 查询成功
+  - `404`: 会话不存在
+
+#### 9.4 查看本次题目列表
+
+- **接口**: `POST /test/pron/testlist`
+- **描述**: 返回本次测评抽取的所有句子列表及其 ID。
+- **需要认证**: 是
+- **响应示例**:
+
+```json
+[
+  {"id": 12, "text": "Bonjour tout le monde"},
+  {"id": 45, "text": "Je m'appelle Léa"}
+]
+```
+
+- **状态码**:
+  - `200`: 查询成功
+  - `404`: 会话不存在
+
+#### 9.5 结束测评
+
+- **接口**: `POST /test/pron/finish`
+- **描述**: 结束当前测评会话，并返回成绩。若测评未完成，需要携带 `confirm=true` 强制结束。
+- **需要认证**: 是
+- **请求体**: `application/x-www-form-urlencoded`
+  - `confirm`: boolean，默认 `false`
+- **响应示例（强制结束）**:
+
+```json
+{
+  "ok": true,
+  "forced_end": true,
+  "message": "⚠️ Test forcefully ended. 3/10 sentences completed.",
+  "data": {
+    "ok": true,
+    "average_score": 82.3,
+    "records": [
+      {
+        "sentence_id": 12,
+        "overall_score": 84.5
+      }
+    ]
+  }
+}
+```
+
+- **状态码**:
+  - `200`: 成功结束会话
+  - `404`: 会话或结果不存在
+
+#### 9.6 清除测评会话
+
+- **接口**: `POST /test/pron/clear_session`
+- **描述**: 主动清除 Redis 中的测评会话（用户放弃测评时使用）。
+- **需要认证**: 是
+- **响应**:
+
+```json
+{
+  "ok": true,
+  "message": "Session cleared"
+}
+```
+
+---
+
+### 10. 数据模型
+
+#### 10.1 法语词性枚举
 
 ```text
 n. - 名词
@@ -528,7 +928,7 @@ interj. - 感叹词
 art. - 冠词
 ```
 
-#### 6.2 日语词性枚举
+#### 10.2 日语词性枚举
 
 ```text
 名词, 形容词, 形容动词, 连用, 一段动词, 五段动词, 
@@ -538,7 +938,7 @@ art. - 冠词
 
 ---
 
-### 7. 错误码说明
+### 11. 错误码说明
 
 | 状态码 | 说明 |
 |--------|------|
@@ -554,13 +954,13 @@ art. - 冠词
 
 ---
 
-### 8. AI助手模块 (`/ai_assist`)
+### 12. AI助手模块 (`/ai_assist`)
 
-#### 8.1 词语智能问答
+#### 12.1 词语智能问答
 
-- **接口**: `POST /ai_assist/exp`
-- **描述**: 针对指定词语，向AI助手提问相关问题，获取简洁自然的答案，适合初学者。
-- **需要认证**: 是
+- **接口**: `POST /ai_assist/word/exp`
+- **描述**: 针对指定词语向AI助手提问，服务端会基于Redis保存的上下文历史给出简洁、贴合学习者的回答。
+- **需要认证**: 是（`Bearer` Token）
 - **请求体**:
 
 ```json
@@ -569,6 +969,10 @@ art. - 冠词
   "question": "string"
 }
 ```
+
+- **限制**:
+  - 普通用户调用次数超过100次时会返回 `400 本月API使用量已超`
+  - 每个 `word` 独立维护聊天上下文，历史保存于Redis
 
 - **响应**:
 
@@ -584,15 +988,24 @@ art. - 冠词
 - **状态码**:
   - `200`: 问答成功
   - `400`: 本月API使用量已超
+  - `401`: 未授权
   - `500`: AI调用失败
 
-#### 8.2 清除词语聊天记录
+#### 12.2 通用AI对话（预留）
+
+- **接口**: `POST /ai_assist/univer`
+- **描述**: 预留的通用AI对话接口，当前版本尚未实现业务逻辑，调用将返回空响应。
+- **需要认证**: 是
+- **状态码**:
+  - `200`: 请求成功（响应体为空）
+
+#### 12.3 清除词语聊天记录
 
 - **接口**: `POST /ai_assist/clear`
 - **描述**: 清除指定词语的AI助手聊天记录
 - **需要认证**: 是
 - **请求参数**:
-  - `word`: 词语 (string)
+  - `word`: 词语 (query 参数，string)
 
 - **响应**:
 
@@ -607,7 +1020,7 @@ art. - 冠词
 
 ---
 
-### 9. 使用示例
+### 13. 使用示例
 
 #### 完整的API调用流程示例
 
@@ -630,15 +1043,26 @@ curl -X POST "http://127.0.0.1:8000/users/login" \
   }'
 
 # 3. 使用返回的token进行词典搜索
-curl -X POST "http://127.0.0.1:8000/search" \
+curl -X POST "http://127.0.0.1:8000/search/word" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
     "query": "bonjour",
+    "language": "fr",
+    "sort": "relevance",
+    "order": "des"
+  }'
+
+# 4. 获取单词联想列表
+curl -X POST "http://127.0.0.1:8000/search/word/list" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_token_here>" \
+  -d '{
+    "query": "bon",
     "language": "fr"
   }'
 
-# 4. 使用翻译API
+# 5. 使用翻译API
 curl -X POST "http://127.0.0.1:8000/translate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
@@ -648,11 +1072,11 @@ curl -X POST "http://127.0.0.1:8000/translate" \
     "to_lang": "zh"
   }'
 
-# 5. 测试Redis连接
+# 6. 测试Redis连接
 curl -X GET "http://127.0.0.1:8000/ping-redis"
 
-# 6. 词语智能问答
-curl -X POST "http://127.0.0.1:8000/ai_assist/exp" \
+# 7. 词语智能问答
+curl -X POST "http://127.0.0.1:8000/ai_assist/word/exp" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
@@ -660,18 +1084,18 @@ curl -X POST "http://127.0.0.1:8000/ai_assist/exp" \
     "question": "什么是法语?"
   }'
 
-# 7. 清除词语聊天记录
-curl -X POST "http://127.0.0.1:8000/ai_assist/clear" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <your_token_here>" \
-  -d '{
-    "word": "法语"
-  }'
+# 8. 清除词语聊天记录
+curl -X POST "http://127.0.0.1:8000/ai_assist/clear?word=法语" \
+  -H "Authorization: Bearer <your_token_here>"
+
+# 9. 开启发音测评
+curl -X GET "http://127.0.0.1:8000/test/pron/start?count=5&lang=fr-FR" \
+  -H "Authorization: Bearer <your_token_here>"
 ```
 
 ---
 
-### 9. 开发者说明
+### 14. 开发者说明
 
 - **数据库**: 使用MySQL存储词典数据和用户信息
 - **缓存**: 使用Redis进行token黑名单管理和API限流
@@ -681,10 +1105,11 @@ curl -X POST "http://127.0.0.1:8000/ai_assist/clear" \
 - **文件上传**: 支持Excel格式的批量词典导入
 - **CORS**: 支持本地开发环境跨域访问
 - **API文档**: 启动服务后访问 `http://127.0.0.1:8000/docs` 查看Swagger文档
+- **发音评测**: `/test/pron` 路由已预留，当前版本尚未提供具体接口
 
 ---
 
-### 10. 部署说明
+### 15. 部署说明
 
 1. 安装依赖: `pip install -r requirements.txt`
 2. 配置数据库连接 (settings.py)

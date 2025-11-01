@@ -5,13 +5,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise.contrib.fastapi import register_tortoise
 
-import app.models.signals
+import app.utils.audio_init
 from app.api.admin.router import admin_router
 from app.api.ai_assist.routes import ai_router
+from app.api.article_director.routes import article_router
 from app.api.make_comments.routes import comment_router
 from app.api.pronounciation_test.routes import pron_test_router
 from app.api.redis_test import redis_test_router
-from app.api.search import dict_search
+from app.api.search_dict.routes import dict_search
 from app.api.translator import translator_router
 from app.api.user.routes import users_router
 from app.api.word_comment.routes import word_comment_router
@@ -62,7 +63,9 @@ app.include_router(comment_router, tags=["Comment API"])
 
 app.include_router(word_comment_router, tags=["Word Comment API"], prefix="/comment/word")
 
-app.include_router(pron_test_router, tags=["Pron Test API"], prefix="/test")
+app.include_router(pron_test_router, tags=["Pron Test API"], prefix="/test/pron")
+
+app.include_router(article_router, tags=["Article API"])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
