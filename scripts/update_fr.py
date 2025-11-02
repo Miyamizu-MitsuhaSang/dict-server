@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 import pandas as pd
-from tortoise import Tortoise, connections
+from tortoise import Tortoise
 from tortoise.exceptions import MultipleObjectsReturned
 
 from app.models.fr import DefinitionFr, WordlistFr
@@ -101,14 +101,13 @@ async def varification_eg():
 
 async def main():
     await Tortoise.init(config=TORTOISE_ORM)
-    await DefinitionFr.all().delete()   # TRUNCATE TABLE definitions_fr;
-    conn = connections.get("default")
-    await conn.execute_script("""
-        ALTER TABLE definitions_fr AUTO_INCREMENT = 1;
-    """)
-    await import_def_fr()
-    # await import_wordlist_fr()
-
+    #     await DefinitionFr.all().delete()   # TRUNCATE TABLE definitions_fr;
+    #     conn = connections.get("default")
+    #     await conn.execute_script("""
+    #         ALTER TABLE definitions_fr AUTO_INCREMENT = 1;
+    #     """)
+    #     await import_def_fr()
+    #     # await import_wordlist_fr()
 
 if __name__ == "__main__":
     asyncio.run(main())

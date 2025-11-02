@@ -1,6 +1,6 @@
 from typing import Literal, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Form
 
 from app.api.search_dict import service
 from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
@@ -167,10 +167,17 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
 @dict_search.post("/search/proverb/list")
 async def search_proverb_list(query_word: ProverbSearchRequest):
     lang = service.detect_language(text=query_word.query)
+    query = normalize_text(query_word.query) if lang == "fr" else query_word.query
     suggest_proverbs = await service.suggest_proverb(
         query=query_word.query,
         lang=lang,
         model=ProverbFr,
+        search_field="search_text",
     )
     # TODO 使用法语词典时是否存在用英语输入的情况
     return {"list": suggest_proverbs}
+
+@dict_search.post("/search/proverb")
+async def search_proverb(proverb_id:int = Form(...), user=Depends(get_current_user)):
+    result = await service.accurate_proverb(proverb_id=proverb_id)
+    return {"result": result}

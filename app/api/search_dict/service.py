@@ -39,12 +39,13 @@ async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
 
 
 async def suggest_proverb(
-    query: str,
-    lang: Literal["fr", "zh", "jp"],
-    model: Type[Model],
-    proverb_field: str = "text",
-    chi_exp_field: str = "chi_exp",
-    limit: int = 10,
+        query: str,
+        lang: Literal["fr", "zh", "jp"],
+        model: Type[Model],
+        search_field: str = "search_text",
+        target_field: str = "text",
+        chi_exp_field: str = "chi_exp",
+        limit: int = 10,
 ) -> List[Dict[str, str]]:
     """
     通用搜索建议函数，用于多语言谚语表。
@@ -71,15 +72,15 @@ async def suggest_proverb(
         startswith_field = f"{chi_exp_field}__istartswith"
         contains_field = f"{chi_exp_field}__icontains"
     else:
-        startswith_field = f"{proverb_field}__istartswith"
-        contains_field = f"{proverb_field}__icontains"
+        startswith_field = f"{search_field}__istartswith"
+        contains_field = f"{search_field}__icontains"
 
     # ✅ 1. 开头匹配
     start_matches = await (
         model.filter(**{startswith_field: keyword})
         .order_by("-freq")
         .limit(limit)
-        .values("id", proverb_field, chi_exp_field)
+        .values("id", target_field, search_field, chi_exp_field)
     )
 
     # ✅ 2. 包含匹配（非开头）
@@ -89,7 +90,7 @@ async def suggest_proverb(
         )
         .order_by("-freq")
         .limit(limit)
-        .values("id", proverb_field, chi_exp_field)
+        .values("id", target_field, search_field, chi_exp_field)
     )
 
     # ✅ 3. 合并去重并保持顺序
@@ -100,7 +101,8 @@ async def suggest_proverb(
             seen_ids.add(row["id"])
             results.append({
                 "id": row["id"],
-                "proverb": row[proverb_field],
+                "proverb": row[target_field],
+                "search_text": row[search_field],
                 "chi_exp": row[chi_exp_field]
             })
 

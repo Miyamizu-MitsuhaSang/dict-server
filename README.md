@@ -334,16 +334,19 @@ Authorization: Bearer <your_jwt_token>
 #### 2.2 法语谚语详情
 
 - **接口**: `POST /search/proverb`
-- **描述**: 通过谚语ID获取法语谚语原文与中文解释。
+- **描述**: 根据谚语ID返回法语谚语全文与中文释义。
 - **需要认证**: 是
-- **查询参数**:
-  - `proverb_id`: 谚语ID (integer)
+- **请求类型**: `application/x-www-form-urlencoded`
+- **表单字段**:
+  - `proverb_id`: 谚语ID (integer，必填)
 - **响应**:
 
 ```json
 {
-  "proverb_text": "Petit à petit, l'oiseau fait son nid.",
-  "chi_exp": "循序渐进才能取得成功。"
+  "result": {
+    "proverb_text": "Petit à petit, l'oiseau fait son nid.",
+    "chi_exp": "循序渐进才能取得成功。"
+  }
 }
 ```
 
@@ -380,14 +383,13 @@ Authorization: Bearer <your_jwt_token>
 #### 2.4 谚语联想建议
 
 - **接口**: `POST /search/proverb/list`
-- **描述**: 按输入内容（自动识别法语或中文）返回谚语候选列表。
+- **描述**: 按输入内容返回谚语候选列表，后端会自动检测输入语言（中文/日文假名/拉丁字母），无法识别时退回法语字段搜索。
 - **需要认证**: 是
 - **请求体**:
 
 ```json
 {
-  "query": "慢",
-  "language": "fr"
+  "query": "慢"
 }
 ```
 
@@ -404,6 +406,9 @@ Authorization: Bearer <your_jwt_token>
   ]
 }
 ```
+
+- **状态码**:
+  - `200`: 查询成功
 
 ---
 
@@ -437,6 +442,7 @@ Authorization: Bearer <your_jwt_token>
 }
 ```
 
+- **限制**: 依赖 Redis 计数器做限流，同一用户每秒最多 2 次请求（超出返回 `429`）
 - **状态码**:
   - `200`: 翻译成功
   - `401`: 未授权
@@ -452,7 +458,7 @@ Authorization: Bearer <your_jwt_token>
   - `from_lang`: 源语言，默认为 `auto`
   - `to_lang`: 目标语言，默认为 `zh`
 
-- **限制**: 每秒最多2次请求
+- **限制**: 与标准翻译接口共享限流计数，同一用户每秒最多2次请求
 - **状态码**:
   - `200`: 翻译成功
   - `429`: 请求频率过高
@@ -770,7 +776,8 @@ Authorization: Bearer <your_jwt_token>
 - **需要认证**: 是
 - **查询参数**:
   - `count`: 抽题数量 (integer，默认 `20`)
-  - `lang`: 语种代码，支持 `fr-FR`（法语）、`ja-JP`（日语），默认 `fr-FR`
+- **表单字段**:
+  - `lang`: 语种代码（`fr-FR` 或 `ja-JP`，默认 `fr-FR`）。由于实现方式，FastAPI 将其视为 form-data 字段，GET 请求需通过 form 提交或在调试文档中直接填写。
 - **响应**:
 
 ```json

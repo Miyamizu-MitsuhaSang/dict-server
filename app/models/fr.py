@@ -48,6 +48,7 @@ class ProverbFr(Model):
     text = fields.TextField(description="法语谚语及常用表达")
     chi_exp = fields.TextField(description="中文释义")
     freq = fields.IntField(default=0)
+    search_text = fields.TextField()
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
