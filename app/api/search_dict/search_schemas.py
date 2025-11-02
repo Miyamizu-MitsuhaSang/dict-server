@@ -13,7 +13,7 @@ class SearchRequest(BaseModel):
 
 class ProverbSearchRequest(BaseModel):
     query: str
-    language: Literal['fr', 'jp'] = "fr"
+    dict_language: Literal['fr', 'jp'] = "fr"
 
 
 class SearchItemJp(BaseModel):

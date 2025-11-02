@@ -1,21 +1,21 @@
 import asyncio
 import re
 import unicodedata
-import jaconv
+from importlib import resources
 from pathlib import Path
 
+import jaconv
 import pandas as pd
 from fugashi import Tagger
-import unidic_lite
-from importlib import resources
 from pykakasi import kakasi
 from tortoise import Tortoise
 from tortoise.exceptions import MultipleObjectsReturned
 
 from app.models import WordlistJp, DefinitionJp, AttachmentJp, PosType
+from app.models.jp import IdiomJp
 from settings import TORTOISE_ORM
 
-xlsx_name = "./DictTable-20250823.xlsx"
+xlsx_name = "./DictTable_20251029.xlsx"
 xlsx_path = Path(xlsx_name)
 
 
@@ -228,6 +228,24 @@ async def set_hiragana(xlsx_path: Path = xlsx_path, sheet_name : str="日汉释�
 
         await WordlistJp.filter(text=word).update(hiragana=hiragana)
 
+async def import_idiom():
+    path = xlsx_path
+    df = pd.read_excel(path, sheet_name="日语惯用语")
+    df.columns = [col.strip() for col in df.columns]
+
+    for row in df.itertuples():
+        sentence = str(row[1]).strip()
+        search_text = str(row[2]).strip()
+        chi_exp = str(row[3]).strip()
+        example = str(row[4]).strip()
+
+        await IdiomJp.create(
+            text=sentence,
+            chi_exp=chi_exp,
+            example=example,
+            search_text=search_text,
+        )
+
 
 async def main():
     await Tortoise.init(config=TORTOISE_ORM)
@@ -237,8 +255,8 @@ async def main():
     # await import_wordlist_jp()
     # await import_def_jp()
     # await import_attachment()
-    await set_hiragana()
-
+    # await set_hiragana()
+    await import_idiom()
 
 if __name__ == '__main__':
     asyncio.run(main())

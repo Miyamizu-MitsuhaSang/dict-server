@@ -45,11 +45,10 @@ class DefinitionFr(Model):
 
 class ProverbFr(Model):
     id = fields.IntField(pk=True)
-    proverb = fields.TextField(description="法语谚语及常用表达")
+    text = fields.TextField(description="法语谚语及常用表达")
     chi_exp = fields.TextField(description="中文释义")
     freq = fields.IntField(default=0)
     created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
 
     class Meta:
         table = "proverb_fr"

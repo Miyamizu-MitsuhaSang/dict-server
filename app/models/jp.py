@@ -87,3 +87,14 @@ class PronunciationTestJp(Model):
 
     class Meta:
         table = "pronunciationtest_jp"
+
+class IdiomJp(Model):
+    id = fields.IntField(pk=True)
+    text = fields.TextField(null=False)
+    chi_exp = fields.TextField(null=False)
+    example = fields.TextField(null=False)
+    search_text = fields.TextField(null=False)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "idiom_jp"

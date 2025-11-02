@@ -8,7 +8,7 @@ from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse
 from app.api.search_dict.service import suggest_autocomplete
 from app.api.word_comment.word_comment_schemas import CommentSet
 from app.models import DefinitionJp, CommentFr, CommentJp
-from app.models.fr import DefinitionFr
+from app.models.fr import DefinitionFr, ProverbFr
 from app.utils.all_kana import all_in_kana
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
@@ -165,7 +165,12 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
 
 
 @dict_search.post("/search/proverb/list")
-async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
-    lang: Literal['fr', 'zh'] = 'zh' if service.contains_chinese(query_word.query) else 'fr'
-    suggest_proverbs = await service.suggest_proverb(query=query_word, lang=lang)
+async def search_proverb_list(query_word: ProverbSearchRequest):
+    lang = service.detect_language(text=query_word.query)
+    suggest_proverbs = await service.suggest_proverb(
+        query=query_word.query,
+        lang=lang,
+        model=ProverbFr,
+    )
+    # TODO 使用法语词典时是否存在用英语输入的情况
     return {"list": suggest_proverbs}

@@ -1,9 +1,8 @@
-import asyncio
 import re
-from typing import List, Tuple, Dict, Literal
+from typing import List, Tuple, Dict, Literal, Type
 
 from fastapi import HTTPException
-from tortoise import Tortoise
+from tortoise import Tortoise, Model
 from tortoise.expressions import Q
 
 from app.api.search_dict.search_schemas import SearchRequest, ProverbSearchResponse, ProverbSearchRequest
@@ -14,75 +13,95 @@ from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
 
 
-def contains_chinese(text: str) -> bool:
-    """判断字符串中是否包含至少一个中文字符"""
-    return bool(re.search(r'[\u4e00-\u9fff]', text))
+def detect_language(text: str) -> Literal["fr", "zh", "jp", "other"]:
+    """
+    自动检测输入语言:
+        返回 'zh' / 'jp' / 'fr' / 'other'
+    """
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "zh"
+    elif re.search(r"[\u3040-\u30ff\u31f0-\u31ff]", text):  # 日文假名范围
+        return "jp"
+    elif re.search(r"[a-zA-ZÀ-ÿ]", text):
+        return "fr"
+    return "other"
 
 
 async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
+    """对于查询法语谚语的精准查询，返回详细信息"""
     proverb = await ProverbFr.get_or_none(id=proverb_id)
     if not proverb:
         raise HTTPException(status_code=404, detail="Proverb not found")
     return ProverbSearchResponse(
-        proverb_text=proverb.proverb,
+        proverb_text=proverb.text,
         chi_exp=proverb.chi_exp,
     )
 
 
-async def suggest_proverb(query: ProverbSearchRequest, lang: Literal['fr', 'zh']) -> List[Dict[str, str]]:
+async def suggest_proverb(
+    query: str,
+    lang: Literal["fr", "zh", "jp"],
+    model: Type[Model],
+    proverb_field: str = "text",
+    chi_exp_field: str = "chi_exp",
+    limit: int = 10,
+) -> List[Dict[str, str]]:
     """
-     对法语谚语表进行搜索建议。
+    通用搜索建议函数，用于多语言谚语表。
     参数:
-        query.query: 搜索关键词
+        query: 搜索关键词
         lang: 'fr' 或 'zh'
-    逻辑:
-        1. 若 lang='fr'，按谚语字段 (proverb) 搜索；
-        2. 若 lang='zh'，按中文释义字段 (chi_exp) 搜索；
-        3. 优先以输入开头的匹配；
-        4. 其次为包含输入但不以其开头的匹配（按 freq 排序）。
-    :return: [{'id': 1, 'proverb': 'xxx'}, ...]
+        model: Tortoise ORM 模型类，例如 ProverbFr
+        proverb_field: 外语谚语字段名
+        chi_exp_field: 中文释义字段名
+        limit: 每类匹配的最大返回数量
+
+    搜索逻辑:
+        1. 根据语言选择搜索字段；
+        2. 优先匹配以输入开头的结果；
+        3. 其次匹配包含输入但非开头的结果；
+        4. 合并去重后返回。
     """
-    keyword = query.query.strip()
-    results: List[Dict[str, str]] = []
-
+    keyword = query.strip()
     if not keyword:
-        return results
+        return []
 
-    # ✅ 根据语言决定搜索字段
+    # ✅ 根据语言选择搜索字段
     if lang == "zh":
-        startswith_field = "chi_exp__istartswith"
-        contains_field = "chi_exp__icontains"
-    else:  # 默认法语
-        startswith_field = "proverb__istartswith"
-        contains_field = "proverb__icontains"
+        startswith_field = f"{chi_exp_field}__istartswith"
+        contains_field = f"{chi_exp_field}__icontains"
+    else:
+        startswith_field = f"{proverb_field}__istartswith"
+        contains_field = f"{proverb_field}__icontains"
 
     # ✅ 1. 开头匹配
     start_matches = await (
-        ProverbFr.filter(**{startswith_field: keyword})
+        model.filter(**{startswith_field: keyword})
         .order_by("-freq")
-        .limit(10)
-        .values("id", "proverb", "chi_exp")
+        .limit(limit)
+        .values("id", proverb_field, chi_exp_field)
     )
 
-    # ✅ 2. 包含匹配（但不是开头）
+    # ✅ 2. 包含匹配（非开头）
     contain_matches = await (
-        ProverbFr.filter(
+        model.filter(
             Q(**{contains_field: keyword}) & ~Q(**{startswith_field: keyword})
         )
         .order_by("-freq")
-        .limit(10)
-        .values("id", "proverb", "chi_exp")
+        .limit(limit)
+        .values("id", proverb_field, chi_exp_field)
     )
 
-    # ✅ 合并结果（去重并保持顺序）
+    # ✅ 3. 合并去重并保持顺序
+    results: List[Dict[str, str]] = []
     seen_ids = set()
     for row in start_matches + contain_matches:
         if row["id"] not in seen_ids:
             seen_ids.add(row["id"])
             results.append({
                 "id": row["id"],
-                "proverb": row["proverb"],
-                "chi_exp": row["chi_exp"]
+                "proverb": row[proverb_field],
+                "chi_exp": row[chi_exp_field]
             })
 
     return results
@@ -205,4 +224,5 @@ async def __main():
 
 
 if __name__ == '__main__':
-    asyncio.run(__main())
+    # asyncio.run(__main())
+    print(detect_language(text="ahsjdasd"))

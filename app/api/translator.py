@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.models import User
 from app.schemas.trans_schemas import TransResponse, TransRequest
+from app.utils.md5 import make_md5
 from app.utils.security import is_admin_user, get_current_user
-from scripts.md5 import make_md5
 from settings import settings
 
 translator_router = APIRouter()
