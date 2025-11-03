@@ -344,8 +344,9 @@ Authorization: Bearer <your_jwt_token>
 ```json
 {
   "result": {
-    "proverb_text": "Petit à petit, l'oiseau fait son nid.",
-    "chi_exp": "循序渐进才能取得成功。"
+    "text": "Petit à petit, l'oiseau fait son nid.",
+    "chi_exp": "循序渐进才能取得成功。",
+    "freq": 128
   }
 }
 ```
@@ -356,7 +357,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.3 单词联想建议
 
-- **接口**: `POST /search/word/list`
+- **接口**: `POST /search/list/word`
 - **描述**: 根据用户输入返回单词联想列表，含前缀匹配与包含匹配。
 - **需要认证**: 是
 - **请求体**:
@@ -380,16 +381,20 @@ Authorization: Bearer <your_jwt_token>
 
 > **说明**: `language = "jp"` 时返回形如 `[["愛", "あい"], ["愛する", "あいする"]]` 的二维数组，第二列为假名读音。
 
+- **状态码**:
+  - `200`: 查询成功
+
 #### 2.4 谚语联想建议
 
-- **接口**: `POST /search/proverb/list`
+- **接口**: `POST /search/list/proverb`
 - **描述**: 按输入内容返回谚语候选列表，后端会自动检测输入语言（中文/日文假名/拉丁字母），无法识别时退回法语字段搜索。
 - **需要认证**: 是
 - **请求体**:
 
 ```json
 {
-  "query": "慢"
+  "query": "慢",
+  "dict_language": "fr"
 }
 ```
 
@@ -409,6 +414,64 @@ Authorization: Bearer <your_jwt_token>
 
 - **状态码**:
   - `200`: 查询成功
+
+#### 2.5 日语惯用语联想建议
+
+- **接口**: `POST /search/list/idiom`
+- **描述**: 针对日语惯用语返回联想候选，支持输入日文假名或中文汉字；若输入匹配汉字映射表，会并发查询假名结果并合并输出。
+- **需要认证**: 是
+- **请求体**:
+
+```json
+{
+  "query": "愛してる",
+  "dict_language": "jp"
+}
+```
+
+- **响应示例**:
+
+```json
+{
+  "list": [
+    {
+      "id": 21,
+      "proverb": "愛してる",
+      "chi_exp": "我爱你"
+    }
+  ]
+}
+```
+
+- **状态码**:
+  - `200`: 查询成功
+  - `400`: 当 `dict_language` 不是 `jp` 时返回错误信息
+
+#### 2.6 日语惯用语详情
+
+- **接口**: `POST /search/idiom`
+- **描述**: 根据惯用语 ID 返回详细信息并增加访问频次。
+- **需要认证**: 是
+- **查询参数**:
+  - `query_id`: 惯用语 ID (integer)
+- **响应示例**:
+
+```json
+{
+  "result": {
+    "id": 21,
+    "text": "愛してる",
+    "search_text": "あいしてる",
+    "chi_exp": "我爱你",
+    "example": "私はあなたを愛してる。",
+    "freq": 57
+  }
+}
+```
+
+- **状态码**:
+  - `200`: 查询成功
+  - `404`: 惯用语不存在
 
 ---
 
@@ -1061,7 +1124,7 @@ curl -X POST "http://127.0.0.1:8000/search/word" \
   }'
 
 # 4. 获取单词联想列表
-curl -X POST "http://127.0.0.1:8000/search/word/list" \
+curl -X POST "http://127.0.0.1:8000/search/list/word" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
