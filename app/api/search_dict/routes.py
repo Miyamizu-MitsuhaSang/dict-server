@@ -5,10 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from app.api.search_dict import service
 from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
     ProverbSearchRequest
-from app.api.search_dict.service import suggest_autocomplete
+from app.api.search_dict.service import suggest_autocomplete, accurate_proverb
 from app.api.word_comment.word_comment_schemas import CommentSet
 from app.models import DefinitionJp, CommentFr, CommentJp
 from app.models.fr import DefinitionFr, ProverbFr
+from app.models.jp import IdiomJp
 from app.utils.all_kana import all_in_kana
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
@@ -165,8 +166,8 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
 
 
 @dict_search.post("/search/proverb/list")
-async def search_proverb_list(query_word: ProverbSearchRequest):
-    lang = service.detect_language(text=query_word.query)
+async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
+    lang = service.detect_language(text=query_word.query)[1]
     query = normalize_text(query_word.query) if lang == "fr" else query_word.query
     suggest_proverbs = await service.suggest_proverb(
         query=query_word.query,
@@ -174,10 +175,40 @@ async def search_proverb_list(query_word: ProverbSearchRequest):
         model=ProverbFr,
         search_field="search_text",
     )
-    # TODO 使用法语词典时是否存在用英语输入的情况
     return {"list": suggest_proverbs}
 
+
 @dict_search.post("/search/proverb")
-async def search_proverb(proverb_id:int = Form(...), user=Depends(get_current_user)):
+async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_user)):
     result = await service.accurate_proverb(proverb_id=proverb_id)
+
+    return {"result": result}
+
+
+@dict_search.post("/search/idiom/list")
+async def search_idiom_list(query_idiom: ProverbSearchRequest):
+    if query_idiom.dict_language == "fr":
+        raise HTTPException(status_code=400, detail="Dict language Error")
+    trad_query, lang = service.detect_language(text=query_idiom.query)
+    query = all_in_kana(text=query_idiom.query) if lang == "jp" else query_idiom.query
+    result = await service.suggest_proverb(
+        query=query,
+        lang=lang,
+        model=IdiomJp,
+        search_field="search_text",
+        target_field="text",
+    )
+    if lang == "zh":
+        trad_query = all_in_kana(text=query_idiom.query)
+        search_idioms_from_chi = await service.suggest_proverb(
+            query=trad_query,
+            lang="jp",
+            model=IdiomJp,
+        )
+        result[:0] = search_idioms_from_chi
+    return {"list": result}
+
+@dict_search.post("/search/idiom")
+async def search_idiom(query_id: int):
+    result = await accurate_proverb(proverb_id=query_id)
     return {"result": result}

@@ -2,6 +2,7 @@ import re
 from typing import List, Tuple, Dict, Literal, Type
 
 from fastapi import HTTPException
+from opencc import OpenCC
 from tortoise import Tortoise, Model
 from tortoise.expressions import Q
 
@@ -13,18 +14,50 @@ from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
 
 
-def detect_language(text: str) -> Literal["fr", "zh", "jp", "other"]:
+def detect_language(text: str) -> Tuple[str, Literal["fr", "zh", "jp", "other"]]:
     """
     自动检测输入语言:
-        返回 'zh' / 'jp' / 'fr' / 'other'
+        - zh: 简体中文
+        - jp: 日语（含假名或繁体/旧体字）
+        - fr: 拉丁字母（法语等）
+        - other: 其他
     """
+    cc_s2t = OpenCC('s2t')  # 简体 → 繁体
+    cc_t2s = OpenCC('t2s')  # 繁体 → 简体
+
+    JAPANESE_HIRAGANA = r"[\u3040-\u309F]"
+    JAPANESE_KATAKANA = r"[\u30A0-\u30FF\u31F0-\u31FF]"
+
+    text = text.strip()
+    if not text:
+        return "", "other"
+
+    # ✅ Step 1: 假名检测
+    if re.search(JAPANESE_HIRAGANA, text) or re.search(JAPANESE_KATAKANA, text):
+        return text, "jp"
+
+    # ✅ Step 2: 汉字检测
     if re.search(r"[\u4e00-\u9fff]", text):
-        return "zh"
-    elif re.search(r"[\u3040-\u30ff\u31f0-\u31ff]", text):  # 日文假名范围
-        return "jp"
-    elif re.search(r"[a-zA-ZÀ-ÿ]", text):
-        return "fr"
-    return "other"
+        # 简繁互转对比
+        to_trad = cc_s2t.convert(text)
+        to_simp = cc_t2s.convert(text)
+
+        # 如果输入等于繁体转换结果 → 繁体或日文汉字
+        if text == to_trad and text != to_simp:
+            return text, "jp"
+        # 如果输入等于简体转换结果 → 简体中文
+        elif text == to_simp and text != to_trad:
+            return to_trad, "zh"  # 注意返回的是繁体形式用于补充搜索
+        # 否则混合（既有简体又有繁体）
+        else:
+            # 混合时可优先认定为繁体（日语）
+            return to_trad, "jp"
+
+    # ✅ Step 3: 拉丁字母检测
+    if re.search(r"[a-zA-ZÀ-ÿ]", text):
+        return text, "fr"
+
+    return text, "other"
 
 
 async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
@@ -32,10 +65,20 @@ async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
     proverb = await ProverbFr.get_or_none(id=proverb_id)
     if not proverb:
         raise HTTPException(status_code=404, detail="Proverb not found")
+    proverb.freq = proverb.freq + 1
+    await proverb.save()
     return ProverbSearchResponse(
         proverb_text=proverb.text,
         chi_exp=proverb.chi_exp,
     )
+
+async def accurate_idiom(idiom_id: int):
+    proverb = await ProverbFr.get_or_none(id=idiom_id)
+    if not proverb:
+        raise HTTPException(status_code=404, detail="Proverb not found")
+    proverb.freq = proverb.freq + 1
+    await proverb.save()
+    return proverb
 
 
 async def suggest_proverb(

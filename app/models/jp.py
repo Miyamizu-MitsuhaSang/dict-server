@@ -94,7 +94,18 @@ class IdiomJp(Model):
     chi_exp = fields.TextField(null=False)
     example = fields.TextField(null=False)
     search_text = fields.TextField(null=False)
+    freq = fields.IntField(defualt=0, null=False)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "idiom_jp"
+
+class KangjiMapping(Model):
+    id = fields.IntField(pk=True)
+    hanzi= fields.TextField(null=False)
+    kangji= fields.TextField(null=False)
+    note= fields.TextField(null=False)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "kangji_mapping_zh_jp"
