@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from app.api.search_dict import service
 from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
     ProverbSearchRequest
-from app.api.search_dict.service import suggest_autocomplete, accurate_proverb
+from app.api.search_dict.service import suggest_autocomplete
 from app.api.word_comment.word_comment_schemas import CommentSet
 from app.models import DefinitionJp, CommentFr, CommentJp
 from app.models.fr import DefinitionFr, ProverbFr
