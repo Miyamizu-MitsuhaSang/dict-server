@@ -1,3 +1,4 @@
+import asyncio
 from typing import Literal, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
@@ -136,23 +137,10 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
         )
 
 
-@dict_search.post("/search/proverb")
-async def proverb(request: Request, proverb_id: int, user=Depends(get_current_user)):
-    """
-    用于法语谚语搜索
-    :param request:
-    :param body: 要求用户输入的内容必须为法语
-    :param user:
-    :return:
-    """
-    content = await service.accurate_proverb(proverb_id=proverb_id)
-    return content
-
-
 # TODO 相关度排序（转换为模糊匹配）
 # TODO 输入搜索框时反馈内容
 
-@dict_search.post("/search/word/list")
+@dict_search.post("/search/list/word")
 async def search_word_list(query_word: SearchRequest, user=Depends(get_current_user)):
     """
     检索时的提示接口
@@ -165,9 +153,9 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
     return {"list": word_contents}
 
 
-@dict_search.post("/search/proverb/list")
+@dict_search.post("/search/list/proverb")
 async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
-    lang = service.detect_language(text=query_word.query)[1]
+    query, lang, _ = service.detect_language(text=query_word.query)
     query = normalize_text(query_word.query) if lang == "fr" else query_word.query
     suggest_proverbs = await service.suggest_proverb(
         query=query_word.query,
@@ -180,35 +168,53 @@ async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get
 
 @dict_search.post("/search/proverb")
 async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_user)):
-    result = await service.accurate_proverb(proverb_id=proverb_id)
+    result = await service.accurate_idiom_proverb(search_id=proverb_id, model=ProverbFr, only_fields=["text", "chi_exp"])
 
     return {"result": result}
 
 
-@dict_search.post("/search/idiom/list")
-async def search_idiom_list(query_idiom: ProverbSearchRequest):
+@dict_search.post("/search/list/idiom")
+async def search_idiom_list(query_idiom: ProverbSearchRequest, user=Depends(get_current_user)):
     if query_idiom.dict_language == "fr":
         raise HTTPException(status_code=400, detail="Dict language Error")
-    trad_query, lang = service.detect_language(text=query_idiom.query)
+
+    mapping_query, lang, is_kangji = await service.detect_language(text=query_idiom.query)
     query = all_in_kana(text=query_idiom.query) if lang == "jp" else query_idiom.query
-    result = await service.suggest_proverb(
-        query=query,
-        lang=lang,
-        model=IdiomJp,
-        search_field="search_text",
-        target_field="text",
-    )
-    if lang == "zh":
-        trad_query = all_in_kana(text=query_idiom.query)
-        search_idioms_from_chi = await service.suggest_proverb(
-            query=trad_query,
-            lang="jp",
+
+    # ✅ 并发任务列表
+    tasks = [
+        service.suggest_proverb(
+            query=query,
+            lang=lang,
             model=IdiomJp,
+            search_field="search_text",
+            target_field="text",
         )
-        result[:0] = search_idioms_from_chi
+    ]
+
+    if lang == "zh" and is_kangji:
+        # jp_query = all_in_kana(text=query_idiom.query)
+        tasks.append(
+            service.suggest_proverb(
+                query=mapping_query,
+                lang="jp",
+                model=IdiomJp,
+                search_field="text",
+            )
+        )
+
+    # ✅ 并发执行（返回结果顺序与任务顺序一致）
+    results = await asyncio.gather(*tasks)
+
+    # ✅ 合并结果
+    result = results[0]
+    if len(results) > 1:
+        result[:0] = results[1]  # 将中文映射查询结果插到最前面
+
     return {"list": result}
 
+
 @dict_search.post("/search/idiom")
-async def search_idiom(query_id: int):
-    result = await accurate_proverb(proverb_id=query_id)
+async def search_idiom(query_id: int, user=Depends(get_current_user)):
+    result = await service.accurate_idiom_proverb(search_id=query_id, model=IdiomJp, only_fields=["id", "text", "search_text", "chi_exp", "example"])
     return {"result": result}

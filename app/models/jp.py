@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple, TypeVar
+from typing import Tuple, TypeVar, Optional
 
 import pandas as pd
 from tortoise import fields
@@ -18,8 +18,8 @@ class WordlistJp(Model):
     text = fields.CharField(max_length=40, description="单词")
     hiragana = fields.CharField(max_length=60, description="假名", null=False)
     freq = fields.IntField(default=0)
-    definitions : fields.ReverseRelation["DefinitionJp"]
-    attachments : fields.ReverseRelation["AttachmentJp"]
+    definitions: fields.ReverseRelation["DefinitionJp"]
+    attachments: fields.ReverseRelation["AttachmentJp"]
 
     class Meta:
         table = "wordlist_jp"
@@ -74,6 +74,7 @@ class DefinitionJp(Model):
     class Meta:
         table = "definitions_jp"
 
+
 class PosType(Model):
     id = fields.IntField(pk=True)
     pos_type = fields.CharEnumField(PosEnumJp, max_length=30, null=False)
@@ -81,12 +82,14 @@ class PosType(Model):
     class Meta:
         table = "pos_type"
 
+
 class PronunciationTestJp(Model):
     id = fields.IntField(pk=True)
     text = fields.TextField(description="朗读文段")
 
     class Meta:
         table = "pronunciationtest_jp"
+
 
 class IdiomJp(Model):
     id = fields.IntField(pk=True)
@@ -100,12 +103,20 @@ class IdiomJp(Model):
     class Meta:
         table = "idiom_jp"
 
+
 class KangjiMapping(Model):
     id = fields.IntField(pk=True)
-    hanzi= fields.TextField(null=False)
-    kangji= fields.TextField(null=False)
-    note= fields.TextField(null=False)
+    hanzi = fields.TextField(null=False)
+    kangji = fields.TextField(null=False)
+    note = fields.TextField(null=False)
     created_at = fields.DatetimeField(auto_now_add=True)
+
+    @classmethod
+    async def chi2kangji(text_chi: str) -> Optional[str]:
+        mapping = await KangjiMapping.get_or_none(hanzi=text_chi)
+        if not mapping:
+            return None
+        return mapping.kangji
 
     class Meta:
         table = "kangji_mapping_zh_jp"

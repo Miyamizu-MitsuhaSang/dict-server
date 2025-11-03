@@ -2,83 +2,70 @@ import re
 from typing import List, Tuple, Dict, Literal, Type
 
 from fastapi import HTTPException
-from opencc import OpenCC
 from tortoise import Tortoise, Model
 from tortoise.expressions import Q
 
-from app.api.search_dict.search_schemas import SearchRequest, ProverbSearchResponse, ProverbSearchRequest
-from app.models import WordlistFr, WordlistJp
-from app.models.fr import ProverbFr
+from app.api.search_dict.search_schemas import SearchRequest, ProverbSearchRequest
+from app.models import WordlistFr, WordlistJp, KangjiMapping
 from app.utils.all_kana import all_in_kana
 from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
 
 
-def detect_language(text: str) -> Tuple[str, Literal["fr", "zh", "jp", "other"]]:
+async def detect_language(text: str) -> Tuple[str, str, bool]:
     """
     自动检测输入语言:
         - zh: 简体中文
-        - jp: 日语（含假名或繁体/旧体字）
+        - jp: 日语（含假名或旧字体）
         - fr: 拉丁字母（法语等）
         - other: 其他
-    """
-    cc_s2t = OpenCC('s2t')  # 简体 → 繁体
-    cc_t2s = OpenCC('t2s')  # 繁体 → 简体
 
+    返回:
+        (映射或原文本, 语言代码, 是否为“含汉字且命中映射表”的情况)
+    """
     JAPANESE_HIRAGANA = r"[\u3040-\u309F]"
     JAPANESE_KATAKANA = r"[\u30A0-\u30FF\u31F0-\u31FF]"
 
     text = text.strip()
     if not text:
-        return "", "other"
+        return "", "other", False
 
-    # ✅ Step 1: 假名检测
-    if re.search(JAPANESE_HIRAGANA, text) or re.search(JAPANESE_KATAKANA, text):
-        return text, "jp"
+    # ✅ Step 1: 全部假名（无汉字）
+    if re.fullmatch(f"(?:{JAPANESE_HIRAGANA}|{JAPANESE_KATAKANA})+", text):
+        return text, "jp", False
 
     # ✅ Step 2: 汉字检测
     if re.search(r"[\u4e00-\u9fff]", text):
-        # 简繁互转对比
-        to_trad = cc_s2t.convert(text)
-        to_simp = cc_t2s.convert(text)
+        # 优先判断是否为日语汉字
+        jp_match = await KangjiMapping.get_or_none(kangji=text).only("kangji")
+        if jp_match:
+            return text, "jp", True  # 含汉字且命中日语列
 
-        # 如果输入等于繁体转换结果 → 繁体或日文汉字
-        if text == to_trad and text != to_simp:
-            return text, "jp"
-        # 如果输入等于简体转换结果 → 简体中文
-        elif text == to_simp and text != to_trad:
-            return to_trad, "zh"  # 注意返回的是繁体形式用于补充搜索
-        # 否则混合（既有简体又有繁体）
-        else:
-            # 混合时可优先认定为繁体（日语）
-            return to_trad, "jp"
+        # 再检查是否为中文汉字
+        zh_match = await KangjiMapping.get_or_none(hanzi=text).only("hanzi", "kangji")
+        if zh_match:
+            return zh_match.kangji, "zh", True  # 含汉字且命中中文列
 
-    # ✅ Step 3: 拉丁字母检测
+        # 若都不在映射表中，则为未映射的中文
+        return text, "zh", False
+
+    # ✅ Step 3: 拉丁字母检测（如法语）
     if re.search(r"[a-zA-ZÀ-ÿ]", text):
-        return text, "fr"
+        return text, "fr", False
 
-    return text, "other"
+    # ✅ Step 4: 其他情况（符号、空格等）
+    return text, "other", False
 
 
-async def accurate_proverb(proverb_id: int) -> ProverbSearchResponse:
-    """对于查询法语谚语的精准查询，返回详细信息"""
-    proverb = await ProverbFr.get_or_none(id=proverb_id)
-    if not proverb:
-        raise HTTPException(status_code=404, detail="Proverb not found")
-    proverb.freq = proverb.freq + 1
-    await proverb.save()
-    return ProverbSearchResponse(
-        proverb_text=proverb.text,
-        chi_exp=proverb.chi_exp,
-    )
-
-async def accurate_idiom(idiom_id: int):
-    proverb = await ProverbFr.get_or_none(id=idiom_id)
-    if not proverb:
-        raise HTTPException(status_code=404, detail="Proverb not found")
-    proverb.freq = proverb.freq + 1
-    await proverb.save()
-    return proverb
+async def accurate_idiom_proverb(search_id: int, model: Type[Model], only_fields: List[str] = None):
+    if "freq" not in only_fields:
+        only_fields.append("freq")
+    result = await model.get_or_none(id=search_id).only(*only_fields)
+    if not result:
+        raise HTTPException(status_code=404, detail="Target not found")
+    result.freq = result.freq + 1
+    await result.save(update_fields=["freq"])
+    return result
 
 
 async def suggest_proverb(
@@ -90,54 +77,37 @@ async def suggest_proverb(
         chi_exp_field: str = "chi_exp",
         limit: int = 10,
 ) -> List[Dict[str, str]]:
-    """
-    通用搜索建议函数，用于多语言谚语表。
-    参数:
-        query: 搜索关键词
-        lang: 'fr' 或 'zh'
-        model: Tortoise ORM 模型类，例如 ProverbFr
-        proverb_field: 外语谚语字段名
-        chi_exp_field: 中文释义字段名
-        limit: 每类匹配的最大返回数量
-
-    搜索逻辑:
-        1. 根据语言选择搜索字段；
-        2. 优先匹配以输入开头的结果；
-        3. 其次匹配包含输入但非开头的结果；
-        4. 合并去重后返回。
-    """
     keyword = query.strip()
     if not keyword:
         return []
 
-    # ✅ 根据语言选择搜索字段
+    # ✅ 搜索条件：中文时双字段联合匹配
     if lang == "zh":
-        startswith_field = f"{chi_exp_field}__istartswith"
-        contains_field = f"{chi_exp_field}__icontains"
+        start_condition = Q(**{f"{chi_exp_field}__istartswith": keyword}) | Q(
+            **{f"{search_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{chi_exp_field}__icontains": keyword}) | Q(**{f"{search_field}__icontains": keyword})
     else:
-        startswith_field = f"{search_field}__istartswith"
-        contains_field = f"{search_field}__icontains"
+        start_condition = Q(**{f"{search_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{search_field}__icontains": keyword})
 
     # ✅ 1. 开头匹配
     start_matches = await (
-        model.filter(**{startswith_field: keyword})
-        .order_by("-freq")
+        model.filter(start_condition)
+        .order_by("-freq", "id")
         .limit(limit)
-        .values("id", target_field, search_field, chi_exp_field)
+        .values("id", target_field, chi_exp_field, "search_text")
     )
 
-    # ✅ 2. 包含匹配（非开头）
+    # ✅ 2. 包含匹配（但不是开头）
     contain_matches = await (
-        model.filter(
-            Q(**{contains_field: keyword}) & ~Q(**{startswith_field: keyword})
-        )
-        .order_by("-freq")
+        model.filter(contain_condition & ~start_condition)
+        .order_by("-freq", "id")
         .limit(limit)
-        .values("id", target_field, search_field, chi_exp_field)
+        .values("id", target_field, chi_exp_field, "search_text")
     )
 
-    # ✅ 3. 合并去重并保持顺序
-    results: List[Dict[str, str]] = []
+    # ✅ 3. 合并去重保持顺序
+    results = []
     seen_ids = set()
     for row in start_matches + contain_matches:
         if row["id"] not in seen_ids:
@@ -145,11 +115,12 @@ async def suggest_proverb(
             results.append({
                 "id": row["id"],
                 "proverb": row[target_field],
-                "search_text": row[search_field],
-                "chi_exp": row[chi_exp_field]
+                "search_text": row["search_text"],
+                "chi_exp": row[chi_exp_field],
             })
 
-    return results
+    # ✅ 截断最终返回数量
+    return results[:limit]
 
 
 async def suggest_autocomplete(query: SearchRequest, limit: int = 10):
