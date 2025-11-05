@@ -5,6 +5,7 @@
 本项目是一个多语言词典API服务，支持法语和日语词典的查询和管理功能。基于FastAPI框架开发，提供用户认证、词典搜索、后台管理等功能。
 
 **服务器地址**: `http://127.0.0.1:8000`  
+**代理前缀提醒**: 由于生产环境通过 Nginx 统一添加了 `/api` 前缀，本文档中的所有接口路径均以 `/api` 开头；若直接访问 FastAPI 本地服务，可去掉该前缀。
 **技术栈**: FastAPI, Tortoise ORM, MySQL, Redis, JWT
 
 ---
@@ -21,12 +22,12 @@ Authorization: Bearer <your_jwt_token>
 
 ## API 接口分类
 
-### 1. 用户认证模块 (`/users`)
+### 1. 用户认证模块 (`/api/users`)
 
 #### 1.1 用户注册
 ##### 1.1.1 注册主接口
 
-- **接口**: `POST /users/register`
+- **接口**: `POST /api/users/register`
 - **描述**: 新用户注册
 - **请求体**:
 
@@ -57,7 +58,7 @@ Authorization: Bearer <your_jwt_token>
 
 ##### 1.1.2 邮箱验证
 
-- **接口**: `POST /users/register/email_verify`
+- **接口**: `POST /api/users/register/email_verify`
 - **描述**: 新用户注册时的邮箱验证
 - **请求体**:
 
@@ -81,7 +82,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.2 用户登录
 
-- **接口**: `POST /users/login`
+- **接口**: `POST /api/users/login`
 - **描述**: 用户登录获取访问令牌
 - **请求体**:
 
@@ -113,7 +114,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.3 用户登出
 
-- **接口**: `POST /users/logout`
+- **接口**: `POST /api/users/logout`
 - **描述**: 用户登出，将令牌加入黑名单
 - **需要认证**: 是
 - **响应**:
@@ -130,7 +131,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.4 更新用户信息
 
-- **接口**: `PUT /users/update`
+- **接口**: `PUT /api/users/update`
 - **描述**: 修改用户信息（用户名、密码等）
 - **需要认证**: 是
 - **请求体**:
@@ -150,7 +151,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.5 邮箱找回密码（发送验证码）
 
-- **接口**: `POST /users/auth/forget-password/email`  
+- **接口**: `POST /api/users/auth/forget-password/email`  
 - **描述**: 用户请求通过邮箱找回密码时，向注册邮箱发送验证码  
 - **请求体**:
 
@@ -176,7 +177,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.6 邮箱验证码验证
 
-- **接口**: `POST /users/auth/varify_code/email`  
+- **接口**: `POST /api/users/auth/varify_code/email`  
 - **描述**: 用户输入邮箱验证码后，验证验证码是否有效，返回重置令牌  
 - **请求体**:
 ```json
@@ -199,7 +200,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 1.7 重置密码
 
-- **接口**: `POST /users/auth/reset-password`  
+- **接口**: `POST /api/users/auth/reset-password`  
 - **描述**: 用户通过邮箱验证码获得的重置令牌来设置新密码 
 - **请求头**: 
   - `x-reset-token`: 重置令牌
@@ -225,7 +226,7 @@ Authorization: Bearer <your_jwt_token>
 
 > **说明**: 该接口仍在服务端保留，但已不再推荐使用，后续版本可能会移除。
 
-- **接口**: `POST /users/auth/forget-password/phone`
+- **接口**: `POST /api/users/auth/forget-password/phone`
 - **描述**: 通过手机号码请求验证码以找回密码
 - **请求体**:
 
@@ -251,7 +252,7 @@ Authorization: Bearer <your_jwt_token>
 
 > **说明**: 该接口与 1.8 配合使用，已不再推荐使用。
 
-- **接口**: `POST /users/auth/varify_code`
+- **接口**: `POST /api/users/auth/varify_code`
 - **描述**: 校验短信验证码是否有效
 - **请求体**:
 
@@ -280,7 +281,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.1 单词精确搜索
 
-- **接口**: `POST /search/word`
+- **接口**: `POST /api/search/word`
 - **描述**: 根据语言精确查询词条，自动累计词频并返回按词性分组的释义。
 - **需要认证**: 是
 - **请求体**:
@@ -333,7 +334,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.2 法语谚语详情
 
-- **接口**: `POST /search/proverb`
+- **接口**: `POST /api/search/proverb`
 - **描述**: 根据谚语ID返回法语谚语全文与中文释义。
 - **需要认证**: 是
 - **请求类型**: `application/x-www-form-urlencoded`
@@ -357,7 +358,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.3 单词联想建议
 
-- **接口**: `POST /search/list/word`
+- **接口**: `POST /api/search/list/word`
 - **描述**: 根据用户输入返回单词联想列表，含前缀匹配与包含匹配。
 - **需要认证**: 是
 - **请求体**:
@@ -386,7 +387,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.4 谚语联想建议
 
-- **接口**: `POST /search/list/proverb`
+- **接口**: `POST /api/search/list/proverb`
 - **描述**: 按输入内容返回谚语候选列表，后端会自动检测输入语言（中文/日文假名/拉丁字母），无法识别时退回法语字段搜索。
 - **需要认证**: 是
 - **请求体**:
@@ -417,7 +418,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.5 日语惯用语联想建议
 
-- **接口**: `POST /search/list/idiom`
+- **接口**: `POST /api/search/list/idiom`
 - **描述**: 针对日语惯用语返回联想候选，支持输入日文假名或中文汉字；若输入匹配汉字映射表，会并发查询假名结果并合并输出。
 - **需要认证**: 是
 - **请求体**:
@@ -449,7 +450,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 2.6 日语惯用语详情
 
-- **接口**: `POST /search/idiom`
+- **接口**: `POST /api/search/idiom`
 - **描述**: 根据惯用语 ID 返回详细信息并增加访问频次。
 - **需要认证**: 是
 - **查询参数**:
@@ -475,11 +476,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 3. 翻译模块 (`/translate`)
+### 3. 翻译模块 (`/api/translate`)
 
 #### 3.1 文本翻译
 
-- **接口**: `POST /translate`
+- **接口**: `POST /api/translate`
 - **描述**: 使用百度翻译API进行文本翻译
 - **需要认证**: 是
 - **请求体**:
@@ -513,7 +514,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 3.2 调试翻译接口
 
-- **接口**: `POST /translate/debug`
+- **接口**: `POST /api/translate/debug`
 - **描述**: 管理员专用的翻译调试接口，带有限流保护
 - **需要认证**: 管理员权限
 - **查询参数**:
@@ -529,11 +530,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 4. Redis测试模块 (`/ping-redis`)
+### 4. Redis测试模块 (`/api/ping-redis`)
 
 #### 4.1 Redis连接测试
 
-- **接口**: `GET /ping-redis`
+- **接口**: `GET /api/ping-redis`
 - **描述**: 测试Redis连接状态
 - **需要认证**: 否
 - **响应**:
@@ -551,13 +552,13 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 5. 管理员模块 (`/admin`)
+### 5. 管理员模块 (`/api/admin`)
 
 > **注意**: 所有管理员接口都需要管理员权限
 
 #### 5.1 获取词典列表
 
-- **接口**: `GET /admin/dict`
+- **接口**: `GET /api/admin/dict`
 - **描述**: 分页获取词典数据，用于后台管理
 - **需要认证**: 管理员权限
 - **查询参数**:
@@ -584,7 +585,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 5.2 搜索词条
 
-- **接口**: `POST /admin/dict/search_word`
+- **接口**: `POST /api/admin/dict/search_word`
 - **描述**: 在后台管理中搜索特定词条
 - **需要认证**: 管理员权限
 - **请求体**:
@@ -614,7 +615,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 5.3 批量更新词条
 
-- **接口**: `PUT /admin/dict/adjust`
+- **接口**: `PUT /api/admin/dict/adjust`
 - **描述**: 批量更新词典定义内容
 - **需要认证**: 管理员权限
 - **请求体**:
@@ -650,7 +651,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 5.4 添加新词条
 
-- **接口**: `POST /admin/dict/add`
+- **接口**: `POST /api/admin/dict/add`
 - **描述**: 添加新的词典条目
 - **需要认证**: 管理员权限
 - **请求体**:
@@ -673,7 +674,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 5.5 Excel批量导入
 
-- **接口**: `POST /admin/dict/update_by_xlsx`
+- **接口**: `POST /api/admin/dict/update_by_xlsx`
 - **描述**: 通过Excel文件批量导入词典数据
 - **需要认证**: 管理员权限
 - **请求类型**: `multipart/form-data`
@@ -695,11 +696,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 6. 用户反馈模块 (`/improvements`)
+### 6. 用户反馈模块 (`/api/improvements`)
 
 #### 6.1 提交用户反馈
 
-- **接口**: `POST /improvements`
+- **接口**: `POST /api/improvements`
 - **描述**: 登录用户提交产品改进或问题反馈，系统会向预设邮箱发送通知。
 - **需要认证**: 是
 - **请求体**:
@@ -729,11 +730,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 7. 词条评论模块 (`/comment/word`)
+### 7. 词条评论模块 (`/api/comment/word`)
 
 #### 7.1 新增词条评论
 
-- **接口**: `POST /comment/word/{lang}`
+- **接口**: `POST /api/comment/word/{lang}`
 - **描述**: 为指定语言的词条添加用户评论
 - **需要认证**: 是
 - **路径参数**:
@@ -754,11 +755,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 8. 作文指导模块 (`/article-director`)
+### 8. 作文指导模块 (`/api/article-director`)
 
 #### 8.1 作文批改会话
 
-- **接口**: `POST /article-director/article`
+- **接口**: `POST /api/article-director/article`
 - **描述**: 将学生作文（文本形式）提交给 EduChat 模型获取结构化点评，会话上下文保存在 Redis 中。
 - **需要认证**: 是
 - **查询参数**:
@@ -790,7 +791,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 8.2 作文追问
 
-- **接口**: `POST /article-director/question`
+- **接口**: `POST /api/article-director/question`
 - **描述**: 在现有作文会话上追加提问，获取针对性回复。
 - **需要认证**: 是
 - **请求体**:
@@ -817,7 +818,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 8.3 重置作文会话
 
-- **接口**: `POST /article-director/reset`
+- **接口**: `POST /api/article-director/reset`
 - **描述**: 清除当前用户在 Redis 中的作文指导上下文，确保下一次批改从头开始。
 - **需要认证**: 是
 - **响应**:
@@ -830,11 +831,11 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
-### 9. 发音测评模块 (`/test/pron`)
+### 9. 发音测评模块 (`/api/test/pron`)
 
 #### 9.1 开始/恢复测评
 
-- **接口**: `GET /test/pron/start`
+- **接口**: `GET /api/test/pron/start`
 - **描述**: 为当前用户新建或恢复发音测评会话，默认随机抽取20句目标语言的测评文本。
 - **需要认证**: 是
 - **查询参数**:
@@ -864,7 +865,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 9.2 提交语音测评
 
-- **接口**: `POST /test/pron/sentence_test`
+- **接口**: `POST /api/test/pron/sentence_test`
 - **描述**: 上传 `.wav` 录音进行发音测评，服务端自动转换格式并调用 Azure Speech 评分。
 - **需要认证**: 是
 - **请求类型**: `multipart/form-data`
@@ -896,7 +897,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 9.3 查询当前题目
 
-- **接口**: `GET /test/pron/current_sentence`
+- **接口**: `GET /api/test/pron/current_sentence`
 - **描述**: 返回当前需要朗读的句子。
 - **需要认证**: 是
 - **响应**:
@@ -915,7 +916,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 9.4 查看本次题目列表
 
-- **接口**: `POST /test/pron/testlist`
+- **接口**: `POST /api/test/pron/testlist`
 - **描述**: 返回本次测评抽取的所有句子列表及其 ID。
 - **需要认证**: 是
 - **响应示例**:
@@ -933,7 +934,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 9.5 结束测评
 
-- **接口**: `POST /test/pron/finish`
+- **接口**: `POST /api/test/pron/finish`
 - **描述**: 结束当前测评会话，并返回成绩。若测评未完成，需要携带 `confirm=true` 强制结束。
 - **需要认证**: 是
 - **请求体**: `application/x-www-form-urlencoded`
@@ -964,7 +965,7 @@ Authorization: Bearer <your_jwt_token>
 
 #### 9.6 清除测评会话
 
-- **接口**: `POST /test/pron/clear_session`
+- **接口**: `POST /api/test/pron/clear_session`
 - **描述**: 主动清除 Redis 中的测评会话（用户放弃测评时使用）。
 - **需要认证**: 是
 - **响应**:
@@ -1024,11 +1025,11 @@ art. - 冠词
 
 ---
 
-### 12. AI助手模块 (`/ai_assist`)
+### 12. AI助手模块 (`/api/ai_assist`)
 
 #### 12.1 词语智能问答
 
-- **接口**: `POST /ai_assist/word/exp`
+- **接口**: `POST /api/ai_assist/word/exp`
 - **描述**: 针对指定词语向AI助手提问，服务端会基于Redis保存的上下文历史给出简洁、贴合学习者的回答。
 - **需要认证**: 是（`Bearer` Token）
 - **请求体**:
@@ -1063,7 +1064,7 @@ art. - 冠词
 
 #### 12.2 通用AI对话（预留）
 
-- **接口**: `POST /ai_assist/univer`
+- **接口**: `POST /api/ai_assist/univer`
 - **描述**: 预留的通用AI对话接口，当前版本尚未实现业务逻辑，调用将返回空响应。
 - **需要认证**: 是
 - **状态码**:
@@ -1071,7 +1072,7 @@ art. - 冠词
 
 #### 12.3 清除词语聊天记录
 
-- **接口**: `POST /ai_assist/clear`
+- **接口**: `POST /api/ai_assist/clear`
 - **描述**: 清除指定词语的AI助手聊天记录
 - **需要认证**: 是
 - **请求参数**:
@@ -1094,9 +1095,11 @@ art. - 冠词
 
 #### 完整的API调用流程示例
 
+> 以下示例使用 FastAPI 原始路由；若部署在带 `/api` 前缀的 Nginx 代理后，请将所有路径替换为 `/api/...`。
+
 ```bash
 # 1. 用户注册
-curl -X POST "http://127.0.0.1:8000/users/register" \
+curl -X POST "http://127.0.0.1:8000/api/users/register" \
   -H "Content-Type: application/json" \
   -d '{
     "username": "testuser",
@@ -1105,7 +1108,7 @@ curl -X POST "http://127.0.0.1:8000/users/register" \
   }'
 
 # 2. 用户登录
-curl -X POST "http://127.0.0.1:8000/users/login" \
+curl -X POST "http://127.0.0.1:8000/api/users/login" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "testuser", 
@@ -1113,7 +1116,7 @@ curl -X POST "http://127.0.0.1:8000/users/login" \
   }'
 
 # 3. 使用返回的token进行词典搜索
-curl -X POST "http://127.0.0.1:8000/search/word" \
+curl -X POST "http://127.0.0.1:8000/api/search/word" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
@@ -1124,7 +1127,7 @@ curl -X POST "http://127.0.0.1:8000/search/word" \
   }'
 
 # 4. 获取单词联想列表
-curl -X POST "http://127.0.0.1:8000/search/list/word" \
+curl -X POST "http://127.0.0.1:8000/api/search/list/word" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
@@ -1133,7 +1136,7 @@ curl -X POST "http://127.0.0.1:8000/search/list/word" \
   }'
 
 # 5. 使用翻译API
-curl -X POST "http://127.0.0.1:8000/translate" \
+curl -X POST "http://127.0.0.1:8000/api/translate" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
@@ -1143,10 +1146,10 @@ curl -X POST "http://127.0.0.1:8000/translate" \
   }'
 
 # 6. 测试Redis连接
-curl -X GET "http://127.0.0.1:8000/ping-redis"
+curl -X GET "http://127.0.0.1:8000/api/ping-redis"
 
 # 7. 词语智能问答
-curl -X POST "http://127.0.0.1:8000/ai_assist/word/exp" \
+curl -X POST "http://127.0.0.1:8000/api/ai_assist/word/exp" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <your_token_here>" \
   -d '{
@@ -1155,11 +1158,11 @@ curl -X POST "http://127.0.0.1:8000/ai_assist/word/exp" \
   }'
 
 # 8. 清除词语聊天记录
-curl -X POST "http://127.0.0.1:8000/ai_assist/clear?word=法语" \
+curl -X POST "http://127.0.0.1:8000/api/ai_assist/clear?word=法语" \
   -H "Authorization: Bearer <your_token_here>"
 
 # 9. 开启发音测评
-curl -X GET "http://127.0.0.1:8000/test/pron/start?count=5&lang=fr-FR" \
+curl -X GET "http://127.0.0.1:8000/api/test/pron/start?count=5&lang=fr-FR" \
   -H "Authorization: Bearer <your_token_here>"
 ```
 
