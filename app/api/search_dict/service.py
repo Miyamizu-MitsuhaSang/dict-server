@@ -14,7 +14,7 @@ from settings import TORTOISE_ORM
 
 
 async def search_time_updates(redis: Redis) -> None:
-    key = "search_times"
+    key = "search_time"
 
     await redis.incr(key, 1)
 
