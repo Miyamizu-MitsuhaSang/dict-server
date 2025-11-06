@@ -78,13 +78,13 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
         )
 
     if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=response.text)
+        raise HTTPException(status_code=500, detail=response.json())
 
     data = response.json()
     print(json.dumps(data, indent=2, ensure_ascii=False))
 
     if "trans_result" not in data:
-        raise HTTPException(status_code=500, detail=data.get("error_msg", "Unknown error"))
+        raise HTTPException(status_code=500, detail={"error_code": data.get("error_code"), "error_msg": data.get("error_msg")})
 
     return "\n".join([item["dst"] for item in data["trans_result"]])
 
@@ -117,13 +117,17 @@ async def rate_limiter(
 @translator_router.post('/translate', response_model=TransResponse, dependencies=[Depends(rate_limiter)])
 async def translate(
         translate_request: TransRequest,
-        user=Depends(get_current_user)
+        user: Tuple[User, Dict] = Depends(get_current_user),
 ):
-    text = await baidu_translation(
-        query=translate_request.query,
-        from_lang=translate_request.from_lang,
-        to_lang=translate_request.to_lang,
-    )
+    try:
+        text = await baidu_translation(
+            query=translate_request.query,
+            from_lang=translate_request.from_lang,
+            to_lang=translate_request.to_lang,
+        )
+    except HTTPException as e:
+        print(e.status_code, e.detail)
+        raise HTTPException(status_code=400, detail=e.detail)
     return TransResponse(translated_text=text)
 
 
@@ -144,4 +148,5 @@ async def test_translate(
     :return:
     """
     raw = await baidu_translation(query, from_lang, to_lang)
+    print(raw)
     return TransResponse(translated_text=raw)
