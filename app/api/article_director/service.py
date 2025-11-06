@@ -42,9 +42,15 @@ def chat_ecnu_request(
 
     return completion
 
+
 def set_user_prompt(user_article: UserArticleRequest, article_lang: str):
-    user_prompt = f"以下是我的{article_lang}作文，作文体裁为{user_article.article_type}，请帮我修改：{user_article.title_content}"
+    if user_article.theme is not None:
+        user_prompt = f"以下是我的{article_lang}作文，作文体裁为{user_article.article_type}，标题为{user_article.theme}, 请帮我修改：{user_article.content}"
+    else:
+        user_prompt = f"以下是我的{article_lang}作文，作文体裁为{user_article.article_type}， 请帮我修改：{user_article.content}"
+
     return user_prompt
+
 
 async def get_session(redis_client: Redis, user_id: str) -> List[Dict[str, str]]:
     """从 Redis 读取对话上下文"""
@@ -55,9 +61,11 @@ async def get_session(redis_client: Redis, user_id: str) -> List[Dict[str, str]]
         # 如果没有记录，创建带 system prompt 的初始会话
         return [{"role": "system", "content": SYSTEM_PROMPT}]
 
+
 async def save_session(redis_client: Redis, user_id: str, session: List[Dict[str, str]]):
     """保存对话上下文到 Redis"""
     await redis_client.setex(f"session:{user_id}", 86400, json.dumps(session))
+
 
 async def reset_session(redis_client: Redis, user_id: str):
     """清空用户上下文"""

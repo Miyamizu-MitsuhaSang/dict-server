@@ -33,7 +33,7 @@ async def article_director(
     article_lang = "法语" if lang == "fr-FR" else "日语"
 
     user_id = user[0].id
-    article = upload_article.title_content
+    article = upload_article.content
 
     # 读取历史对话
     session = await service.get_session(redis_client=redis, user_id=user_id)

@@ -768,7 +768,8 @@ Authorization: Bearer <your_jwt_token>
 
 ```json
 {
-  "title_content": "我的作文全文......",
+  "theme": "标题（可选）",
+  "content": "正文内容",
   "article_type": "议论文"
 }
 ```
