@@ -2,6 +2,7 @@ import re
 from typing import List, Tuple, Dict, Literal, Type
 
 from fastapi import HTTPException
+from redis.asyncio import Redis
 from tortoise import Tortoise, Model
 from tortoise.expressions import Q
 
@@ -10,6 +11,12 @@ from app.models import WordlistFr, WordlistJp, KangjiMapping
 from app.utils.all_kana import all_in_kana
 from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
+
+
+async def search_time_updates(redis: Redis) -> None:
+    key = "search_times"
+
+    await redis.incr(key, 1)
 
 
 async def detect_language(text: str) -> Tuple[str, str, bool]:

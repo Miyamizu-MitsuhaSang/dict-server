@@ -67,7 +67,10 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
     :param user:
     :return:
     """
+    redis = request.app.state.redis
+
     query = body.query
+
     if body.language == 'fr':
         query = normalize_text(query)
         word_contents = await (
@@ -100,6 +103,9 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
                     eng_explanation=wc.eng_explanation,
                 )
             )
+
+        await service.search_time_updates(redis)
+
         return WordSearchResponse(
             query=query,
             pos=pos_contents,
@@ -130,6 +136,9 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
                     example=wc.example,
                 )
             )
+
+        await service.search_time_updates(redis)
+
         return WordSearchResponse(
             query=query,
             pos=pos_contents,
