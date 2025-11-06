@@ -14,7 +14,7 @@ async def get_search_time(request: Request):
     if not count:
         await redis.set(key, value=0)
         count = 0
-
+    print(count)
     return {
         "count": count,
     }
