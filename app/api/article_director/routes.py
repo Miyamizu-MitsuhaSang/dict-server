@@ -29,6 +29,7 @@ async def article_director(
     :return:
     """
     redis = request.app.state.redis
+    # print(upload_article)
 
     article_lang = "法语" if lang == "fr-FR" else "日语"
 
@@ -47,6 +48,8 @@ async def article_director(
 
     # 取出回答内容
     assistant_reply = completion.choices[0].message.content
+
+    assistant_reply = await service.reply_process(assistant_reply)
 
     # 保存模型回复
     session.append({"role": "assistant", "content": assistant_reply})

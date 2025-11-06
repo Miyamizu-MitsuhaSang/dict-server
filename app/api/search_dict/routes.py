@@ -188,7 +188,7 @@ async def search_idiom_list(query_idiom: ProverbSearchRequest, user=Depends(get_
         raise HTTPException(status_code=400, detail="Dict language Error")
 
     mapping_query, lang, is_kangji = await service.detect_language(text=query_idiom.query)
-    query = all_in_kana(text=query_idiom.query) if lang == "jp" else query_idiom.query
+    query = query_idiom.query
 
     # ✅ 并发任务列表
     tasks = [

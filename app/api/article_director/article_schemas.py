@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class UserArticleRequest(BaseModel):
-    theme: Optional[str]
+    theme: Optional[str] = None
     content: str
     article_type: str
 

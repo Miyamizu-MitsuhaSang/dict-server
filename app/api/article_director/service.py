@@ -59,7 +59,7 @@ async def get_session(redis_client: Redis, user_id: str) -> List[Dict[str, str]]
         return json.loads(data)
     else:
         # 如果没有记录，创建带 system prompt 的初始会话
-        return [{"role": "system", "content": SYSTEM_PROMPT}]
+        return [{"role": "system", "content": SYSTEM_PROMPT},]
 
 
 async def save_session(redis_client: Redis, user_id: str, session: List[Dict[str, str]]):
@@ -70,3 +70,12 @@ async def save_session(redis_client: Redis, user_id: str, session: List[Dict[str
 async def reset_session(redis_client: Redis, user_id: str):
     """清空用户上下文"""
     await redis_client.delete(f"session:{user_id}")
+
+async def reply_process(reply: str) -> str:
+    """
+    对原始回答进行字符串预处理
+    :param reply: 大模型的原始回答
+    :return:
+    """
+    reply.replace("**", "")
+    return reply

@@ -44,9 +44,20 @@ async def register(req: Request, user_in: UserIn):
         language=lang_pref,
         encrypted_phone=encrypted_phone,
     )
+
+    payload = {
+        "user_id": new_user.id,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
+        "is_admin": new_user.is_admin,
+    }
+
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
     return {
         "id": new_user.id,
         "message": "register success",
+        "access_token": token,
+        "token_type": "bearer",
     }
 
 
@@ -96,7 +107,7 @@ async def user_modification(updated_user: UpdateUserRequest, current_user: Tuple
 
 @users_router.post("/login")
 async def user_login(user_in: UserLoginRequest):
-    user = await User.get_or_none(name=user_in.name)
+    user = await User.get_or_none(name=user_in.name).prefetch_related("language")
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
@@ -106,7 +117,7 @@ async def user_login(user_in: UserLoginRequest):
     # token 中放置的信息
     payload = {
         "user_id": user.id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=2),  # 设置过期时间
+        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
         "is_admin": user.is_admin,
     }
 
@@ -118,7 +129,8 @@ async def user_login(user_in: UserLoginRequest):
         "user": {
             "id": user.id,
             "username": user.name,
-            "is_admin": user.is_admin
+            "is_admin": user.is_admin,
+            "lang_pref": user.language.code
         }
     }
 

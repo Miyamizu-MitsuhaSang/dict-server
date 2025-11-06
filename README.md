@@ -34,7 +34,7 @@ Authorization: Bearer <your_jwt_token>
 ```json
 {
   "username": "string",
-  "password": "string", 
+  "password": "string",
   "email": "EmailFields[string]",
   "phone": "PhoneFields",
   "lang_pref": "jp" | "fr" | "private",
@@ -48,13 +48,15 @@ Authorization: Bearer <your_jwt_token>
 ```json
 {
   "id": "integer",
-  "message": "register success"
+  "message": "register success",
+  "access_token" : "string",
+  "token_type": "bearer"
 }
 ```
 
 - **状态码**:
-  - `200`: 注册成功
-  - `400`: 参数验证失败
+    - `200`: 注册成功
+    - `400`: 参数验证失败
 
 ##### 1.1.2 邮箱验证
 
@@ -77,8 +79,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 邮件发送成功
-  - `400`: 邮箱已被使用
+    - `200`: 邮件发送成功
+    - `400`: 邮箱已被使用
 
 #### 1.2 用户登录
 
@@ -101,16 +103,17 @@ Authorization: Bearer <your_jwt_token>
   "token_type": "bearer",
   "user": {
     "id": "integer",
-    "username": "string", 
-    "is_admin": "boolean"
+    "username": "string",
+    "is_admin": "boolean",
+    "lang_pref": "str",
   }
 }
 ```
 
 - **状态码**:
-  - `200`: 登录成功
-  - `400`: 用户名或密码错误
-  - `404`: 用户不存在
+    - `200`: 登录成功
+    - `400`: 用户名或密码错误
+    - `404`: 用户不存在
 
 #### 1.3 用户登出
 
@@ -126,8 +129,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 登出成功
-  - `401`: 未登录或令牌无效
+    - `200`: 登出成功
+    - `401`: 未登录或令牌无效
 
 #### 1.4 更新用户信息
 
@@ -146,13 +149,13 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 更新成功
-  - `400`: 原密码错误或用户名为保留词
+    - `200`: 更新成功
+    - `400`: 原密码错误或用户名为保留词
 
 #### 1.5 邮箱找回密码（发送验证码）
 
-- **接口**: `POST /api/users/auth/forget-password/email`  
-- **描述**: 用户请求通过邮箱找回密码时，向注册邮箱发送验证码  
+- **接口**: `POST /api/users/auth/forget-password/email`
+- **描述**: 用户请求通过邮箱找回密码时，向注册邮箱发送验证码
 - **请求体**:
 
 ```json
@@ -172,13 +175,13 @@ Authorization: Bearer <your_jwt_token>
 
 
 - **状态码**
-  - `200`: 更新成功
-  - `404`: 用户不存在
+    - `200`: 更新成功
+    - `404`: 用户不存在
 
 #### 1.6 邮箱验证码验证
 
-- **接口**: `POST /api/users/auth/varify_code/email`  
-- **描述**: 用户输入邮箱验证码后，验证验证码是否有效，返回重置令牌  
+- **接口**: `POST /api/users/auth/varify_code/email`
+- **描述**: 用户输入邮箱验证码后，验证验证码是否有效，返回重置令牌
 - **请求体**:
 ```json
 {
@@ -195,15 +198,15 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**
-  - `200`: 验证码验证成功
-  - `400`: 验证码错误或已过期
+    - `200`: 验证码验证成功
+    - `400`: 验证码错误或已过期
 
 #### 1.7 重置密码
 
-- **接口**: `POST /api/users/auth/reset-password`  
-- **描述**: 用户通过邮箱验证码获得的重置令牌来设置新密码 
-- **请求头**: 
-  - `x-reset-token`: 重置令牌
+- **接口**: `POST /api/users/auth/reset-password`
+- **描述**: 用户通过邮箱验证码获得的重置令牌来设置新密码
+- **请求头**:
+    - `x-reset-token`: 重置令牌
 - **请求体**:
 ```json
 {
@@ -219,8 +222,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**
-  - `200`: 密码重置成功
-  - `400`: 密码不合法或令牌无效
+    - `200`: 密码重置成功
+    - `400`: 密码不合法或令牌无效
 
 #### 1.8 手机找回密码（已废弃）
 
@@ -245,8 +248,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 发送成功
-  - `404`: 手机号未注册
+    - `200`: 发送成功
+    - `404`: 手机号未注册
 
 #### 1.9 手机验证码验证（已废弃）
 
@@ -272,8 +275,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 验证成功
-  - `400`: 验证码错误或已过期
+    - `200`: 验证成功
+    - `400`: 验证码错误或已过期
 
 ---
 
@@ -328,9 +331,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 搜索成功
-  - `404`: 未找到词条
-  - `401`: 未授权
+    - `200`: 搜索成功
+    - `404`: 未找到词条
+    - `401`: 未授权
 
 #### 2.2 法语谚语详情
 
@@ -339,7 +342,7 @@ Authorization: Bearer <your_jwt_token>
 - **需要认证**: 是
 - **请求类型**: `application/x-www-form-urlencoded`
 - **表单字段**:
-  - `proverb_id`: 谚语ID (integer，必填)
+    - `proverb_id`: 谚语ID (integer，必填)
 - **响应**:
 
 ```json
@@ -353,8 +356,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
-  - `404`: 谚语不存在
+    - `200`: 查询成功
+    - `404`: 谚语不存在
 
 #### 2.3 单词联想建议
 
@@ -383,7 +386,7 @@ Authorization: Bearer <your_jwt_token>
 > **说明**: `language = "jp"` 时返回形如 `[["愛", "あい"], ["愛する", "あいする"]]` 的二维数组，第二列为假名读音。
 
 - **状态码**:
-  - `200`: 查询成功
+    - `200`: 查询成功
 
 #### 2.4 谚语联想建议
 
@@ -414,7 +417,7 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
+    - `200`: 查询成功
 
 #### 2.5 日语惯用语联想建议
 
@@ -445,8 +448,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
-  - `400`: 当 `dict_language` 不是 `jp` 时返回错误信息
+    - `200`: 查询成功
+    - `400`: 当 `dict_language` 不是 `jp` 时返回错误信息
 
 #### 2.6 日语惯用语详情
 
@@ -454,7 +457,7 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 根据惯用语 ID 返回详细信息并增加访问频次。
 - **需要认证**: 是
 - **查询参数**:
-  - `query_id`: 惯用语 ID (integer)
+    - `query_id`: 惯用语 ID (integer)
 - **响应示例**:
 
 ```json
@@ -471,8 +474,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
-  - `404`: 惯用语不存在
+    - `200`: 查询成功
+    - `404`: 惯用语不存在
 
 ---
 
@@ -494,9 +497,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **请求参数说明**:
-  - `query`: 待翻译的文本
-  - `from_lang`: 源语言，支持值: `auto`(自动检测), `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
-  - `to_lang`: 目标语言，支持值: `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
+    - `query`: 待翻译的文本
+    - `from_lang`: 源语言，支持值: `auto`(自动检测), `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
+    - `to_lang`: 目标语言，支持值: `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
 
 - **响应**:
 
@@ -508,9 +511,9 @@ Authorization: Bearer <your_jwt_token>
 
 - **限制**: 依赖 Redis 计数器做限流，同一用户每秒最多 2 次请求（超出返回 `429`）
 - **状态码**:
-  - `200`: 翻译成功
-  - `401`: 未授权
-  - `500`: 翻译服务错误
+    - `200`: 翻译成功
+    - `401`: 未授权
+    - `500`: 翻译服务错误
 
 #### 3.2 调试翻译接口
 
@@ -518,15 +521,15 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 管理员专用的翻译调试接口，带有限流保护
 - **需要认证**: 管理员权限
 - **查询参数**:
-  - `query`: 待翻译文本
-  - `from_lang`: 源语言，默认为 `auto`
-  - `to_lang`: 目标语言，默认为 `zh`
+    - `query`: 待翻译文本
+    - `from_lang`: 源语言，默认为 `auto`
+    - `to_lang`: 目标语言，默认为 `zh`
 
 - **限制**: 与标准翻译接口共享限流计数，同一用户每秒最多2次请求
 - **状态码**:
-  - `200`: 翻译成功
-  - `429`: 请求频率过高
-  - `403`: 权限不足
+    - `200`: 翻译成功
+    - `429`: 请求频率过高
+    - `403`: 权限不足
 
 ---
 
@@ -562,9 +565,9 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 分页获取词典数据，用于后台管理
 - **需要认证**: 管理员权限
 - **查询参数**:
-  - `page`: 页码 (默认: 1, 最小: 1)
-  - `page_size`: 每页条数 (默认: 10, 最大: 10)
-  - `lang_code`: 语言代码 ("fr" | "jp", 默认: "fr")
+    - `page`: 页码 (默认: 1, 最小: 1)
+    - `page_size`: 每页条数 (默认: 10, 最大: 10)
+    - `lang_code`: 语言代码 ("fr" | "jp", 默认: "fr")
 
 - **响应**:
 
@@ -574,7 +577,7 @@ Authorization: Bearer <your_jwt_token>
   "data": [
     {
       "word__text": "string",
-      "pos": "string", 
+      "pos": "string",
       "meaning": "string",
       "example": "string",
       "eng_explanation": "string"
@@ -606,7 +609,7 @@ Authorization: Bearer <your_jwt_token>
     "id": "integer",
     "word": "string",
     "pos": "string",
-    "meaning": "string", 
+    "meaning": "string",
     "example": "string",
     "eng_explanation": "string"
   }
@@ -645,9 +648,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 更新成功
-  - `400`: 词条不存在
-  - `422`: 无改动信息
+    - `200`: 更新成功
+    - `400`: 词条不存在
+    - `422`: 无改动信息
 
 #### 5.4 添加新词条
 
@@ -668,9 +671,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 添加成功
-  - `409`: 释义已存在
-  - `400`: 不支持的语言类型
+    - `200`: 添加成功
+    - `409`: 释义已存在
+    - `400`: 不支持的语言类型
 
 #### 5.5 Excel批量导入
 
@@ -679,7 +682,7 @@ Authorization: Bearer <your_jwt_token>
 - **需要认证**: 管理员权限
 - **请求类型**: `multipart/form-data`
 - **请求参数**:
-  - `file`: Excel文件 (.xlsx 或 .xls 格式)
+    - `file`: Excel文件 (.xlsx 或 .xls 格式)
 
 - **响应**:
 
@@ -690,9 +693,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 导入成功
-  - `400`: 文件格式错误
-  - `500`: 导入失败
+    - `200`: 导入成功
+    - `400`: 文件格式错误
+    - `500`: 导入失败
 
 ---
 
@@ -713,8 +716,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **字段说明**:
-  - `report_part`: 反馈类别，可选值 `ui_design`, `dict_fr`, `dict_jp`, `user`, `translate`, `writting`, `ai_assist`, `pronounce`（`comment_api_test` 仅用于内部测试）
-  - `text`: 反馈正文，不能为空
+    - `report_part`: 反馈类别，可选值 `ui_design`, `dict_fr`, `dict_jp`, `user`, `translate`, `writting`, `ai_assist`, `pronounce`（`comment_api_test` 仅用于内部测试）
+    - `text`: 反馈正文，不能为空
 
 - **响应**:
 
@@ -725,8 +728,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 提交成功
-  - `422`: 字段校验失败（不合法的类别或空文本）
+    - `200`: 提交成功
+    - `422`: 字段校验失败（不合法的类别或空文本）
 
 ---
 
@@ -738,7 +741,7 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 为指定语言的词条添加用户评论
 - **需要认证**: 是
 - **路径参数**:
-  - `lang`: `fr` 或 `jp`
+    - `lang`: `fr` 或 `jp`
 - **请求体**:
 
 ```json
@@ -750,8 +753,8 @@ Authorization: Bearer <your_jwt_token>
 
 - **响应**: 创建成功时返回 `200`，响应体为空。
 - **状态码**:
-  - `200`: 创建成功
-  - `422`: 字段校验失败
+    - `200`: 创建成功
+    - `422`: 字段校验失败
 
 ---
 
@@ -763,7 +766,7 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 将学生作文（文本形式）提交给 EduChat 模型获取结构化点评，会话上下文保存在 Redis 中。
 - **需要认证**: 是
 - **查询参数**:
-  - `lang`: 作文语种，默认 `fr-FR`，可选值 `fr-FR`（法语）、`ja-JP`（日语）、`en-US`（英文）
+    - `lang`: 作文语种，默认 `fr-FR`，可选值 `fr-FR`（法语）、`ja-JP`（日语）、`en-US`（英文）
 - **请求体**:
 
 ```json
@@ -785,8 +788,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 批改成功
-  - `401`: 未授权
+    - `200`: 批改成功
+    - `401`: 未授权
 
 > **提示**: 每次调用批改/追问接口之后，前端应根据需要调用重置接口清空 Redis 中的上下文。
 
@@ -814,8 +817,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 追问成功
-  - `401`: 未授权
+    - `200`: 追问成功
+    - `401`: 未授权
 
 #### 8.3 重置作文会话
 
@@ -840,9 +843,9 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 为当前用户新建或恢复发音测评会话，默认随机抽取20句目标语言的测评文本。
 - **需要认证**: 是
 - **查询参数**:
-  - `count`: 抽题数量 (integer，默认 `20`)
+    - `count`: 抽题数量 (integer，默认 `20`)
 - **表单字段**:
-  - `lang`: 语种代码（`fr-FR` 或 `ja-JP`，默认 `fr-FR`）。由于实现方式，FastAPI 将其视为 form-data 字段，GET 请求需通过 form 提交或在调试文档中直接填写。
+    - `lang`: 语种代码（`fr-FR` 或 `ja-JP`，默认 `fr-FR`）。由于实现方式，FastAPI 将其视为 form-data 字段，GET 请求需通过 form 提交或在调试文档中直接填写。
 - **响应**:
 
 ```json
@@ -860,9 +863,9 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 成功创建或恢复会话
-  - `400`: 不支持的语言参数
-  - `404`: 题库为空
+    - `200`: 成功创建或恢复会话
+    - `400`: 不支持的语言参数
+    - `404`: 题库为空
 
 #### 9.2 提交语音测评
 
@@ -871,8 +874,8 @@ Authorization: Bearer <your_jwt_token>
 - **需要认证**: 是
 - **请求类型**: `multipart/form-data`
 - **表单字段**:
-  - `record`: 上传的音频文件（仅支持 `.wav`）
-  - `lang`: 语种代码，默认 `fr-FR`
+    - `record`: 上传的音频文件（仅支持 `.wav`）
+    - `lang`: 语种代码，默认 `fr-FR`
 - **响应示例**:
 
 ```json
@@ -891,10 +894,10 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 评分成功（若全部句子完成，会自动结束会话）
-  - `400`: 会话不存在或音频转换失败
-  - `404`: 对应题目不存在
-  - `415`: 音频格式不符合要求
+    - `200`: 评分成功（若全部句子完成，会自动结束会话）
+    - `400`: 会话不存在或音频转换失败
+    - `404`: 对应题目不存在
+    - `415`: 音频格式不符合要求
 
 #### 9.3 查询当前题目
 
@@ -912,8 +915,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
-  - `404`: 会话不存在
+    - `200`: 查询成功
+    - `404`: 会话不存在
 
 #### 9.4 查看本次题目列表
 
@@ -930,8 +933,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 查询成功
-  - `404`: 会话不存在
+    - `200`: 查询成功
+    - `404`: 会话不存在
 
 #### 9.5 结束测评
 
@@ -939,7 +942,7 @@ Authorization: Bearer <your_jwt_token>
 - **描述**: 结束当前测评会话，并返回成绩。若测评未完成，需要携带 `confirm=true` 强制结束。
 - **需要认证**: 是
 - **请求体**: `application/x-www-form-urlencoded`
-  - `confirm`: boolean，默认 `false`
+    - `confirm`: boolean，默认 `false`
 - **响应示例（强制结束）**:
 
 ```json
@@ -961,8 +964,8 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **状态码**:
-  - `200`: 成功结束会话
-  - `404`: 会话或结果不存在
+    - `200`: 成功结束会话
+    - `404`: 会话或结果不存在
 
 #### 9.6 清除测评会话
 
@@ -1043,8 +1046,8 @@ art. - 冠词
 ```
 
 - **限制**:
-  - 普通用户调用次数超过100次时会返回 `400 本月API使用量已超`
-  - 每个 `word` 独立维护聊天上下文，历史保存于Redis
+    - 普通用户调用次数超过100次时会返回 `400 本月API使用量已超`
+    - 每个 `word` 独立维护聊天上下文，历史保存于Redis
 
 - **响应**:
 
@@ -1058,10 +1061,10 @@ art. - 冠词
 ```
 
 - **状态码**:
-  - `200`: 问答成功
-  - `400`: 本月API使用量已超
-  - `401`: 未授权
-  - `500`: AI调用失败
+    - `200`: 问答成功
+    - `400`: 本月API使用量已超
+    - `401`: 未授权
+    - `500`: AI调用失败
 
 #### 12.2 通用AI对话（预留）
 
@@ -1069,7 +1072,7 @@ art. - 冠词
 - **描述**: 预留的通用AI对话接口，当前版本尚未实现业务逻辑，调用将返回空响应。
 - **需要认证**: 是
 - **状态码**:
-  - `200`: 请求成功（响应体为空）
+    - `200`: 请求成功（响应体为空）
 
 #### 12.3 清除词语聊天记录
 
@@ -1077,7 +1080,7 @@ art. - 冠词
 - **描述**: 清除指定词语的AI助手聊天记录
 - **需要认证**: 是
 - **请求参数**:
-  - `word`: 词语 (query 参数，string)
+    - `word`: 词语 (query 参数，string)
 
 - **响应**:
 
@@ -1088,7 +1091,7 @@ art. - 冠词
 ```
 
 - **状态码**:
-  - `200`: 清除成功
+    - `200`: 清除成功
 
 ---
 
@@ -1195,4 +1198,4 @@ curl -X GET "http://127.0.0.1:8000/api/test/pron/start?count=5&lang=fr-FR" \
 ---
 
 *文档版本: 2.0*  
-*最后更新: 2025年9月22日*
+*最后更新: 2025年11月7日*
