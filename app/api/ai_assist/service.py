@@ -11,7 +11,7 @@ async def get_and_set_last_key(redis: Redis, word: str, user_id: str):
     print(last_word)
 
     # 如果上一次查的词和这次不同，就清空旧词的记录
-    if last_word and last_word.decode() != word:
+    if last_word and last_word != word:
         await clear_chat_history(redis, user_id, last_word.decode())
 
     # 更新当前词
