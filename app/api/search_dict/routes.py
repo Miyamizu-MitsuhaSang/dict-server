@@ -216,7 +216,7 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
 
 @dict_search.post("/search/list/proverb")
 async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
-    query, lang, _ = service.detect_language(text=query_word.query)
+    query, lang, transable = service.detect_language(text=query_word.query)
     query = normalize_text(query_word.query) if lang == "fr" else query_word.query
     suggest_proverbs = await service.suggest_proverb(
         query=query_word.query,
