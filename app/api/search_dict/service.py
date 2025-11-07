@@ -140,19 +140,18 @@ async def suggest_autocomplete(
         text_field: str = "text",
         hira_field: str = "hiragana",
         freq_field: str = "freq",
-        english_field: str = "eng_explanation",
         limit: int = 10,
 ) -> List[Dict[str, str]]:
     """
-    通用自动补全建议接口（增强版）：
-    - 法语: 按 search_text / text 搜索，同时反查 DefinitionFr 的英文释义
-    - 日语: 先按原文 text 匹配，再按假名 search_text 匹配
+    通用自动补全建议接口：
+    - 法语: 按 search_text / text 搜索 + 反查 DefinitionFr 英/中释义
+    - 日语: 先按原文 text 匹配，再按假名匹配 + 反查 DefinitionJp 中文释义
     统一返回结构：
     [
         {
             "word": "étudier",
             "hiragana": None,
-            "meanings": [],
+            "meanings": ["学习", "研究"],
             "english": ["to study", "to learn"]
         }
     ]
@@ -161,19 +160,25 @@ async def suggest_autocomplete(
     if not keyword:
         return []
 
-    # ========== 法语 ==========
+    # ========== 法语分支 ==========
     if dict_lang == "fr":
-        start_condition = Q(**{f"{search_field}__istartswith": keyword}) | Q(**{f"{text_field}__istartswith": keyword})
-        contain_condition = Q(**{f"{search_field}__icontains": keyword}) | Q(**{f"{text_field}__icontains": keyword})
+        start_condition = (
+                Q(**{f"{search_field}__istartswith": keyword})
+                | Q(**{f"{text_field}__istartswith": keyword})
+        )
+        contain_condition = (
+                Q(**{f"{search_field}__icontains": keyword})
+                | Q(**{f"{text_field}__icontains": keyword})
+        )
         value_fields = ["id", text_field, freq_field, search_field]
 
-    # ========== 日语 ==========
+    # ========== 日语分支 ==========
     elif dict_lang == "jp":
         kana_word = all_in_kana(keyword)
-        start_condition = Q(**{f"{text_field}__istartswith": keyword})
+        start_condition = Q(**{f"{text_field}__startswith": keyword})
         contain_condition = Q(**{f"{text_field}__icontains": keyword})
 
-        kana_start = Q(**{f"{hira_field}__istartswith": kana_word})
+        kana_start = Q(**{f"{hira_field}__startswith": kana_word})
         kana_contain = Q(**{f"{hira_field}__icontains": kana_word})
 
         start_condition |= kana_start
@@ -183,7 +188,7 @@ async def suggest_autocomplete(
     else:
         return []
 
-    # ✅ 1. 开头匹配
+    # ✅ 获取匹配单词
     start_matches = await (
         model.filter(start_condition)
         .order_by(f"-{freq_field}", "id")
@@ -191,7 +196,6 @@ async def suggest_autocomplete(
         .values(*value_fields)
     )
 
-    # ✅ 2. 包含匹配
     contain_matches = await (
         model.filter(contain_condition & ~start_condition)
         .order_by(f"-{freq_field}", "id")
@@ -199,33 +203,55 @@ async def suggest_autocomplete(
         .values(*value_fields)
     )
 
-    # ✅ 3. 合并去重
     results = []
     seen_ids = set()
     for row in start_matches + contain_matches:
-        if row["id"] in seen_ids:
-            continue
-        seen_ids.add(row["id"])
+        if row["id"] not in seen_ids:
+            seen_ids.add(row["id"])
+            results.append({
+                "id": row["id"],
+                "word": row[text_field],
+                "hiragana": row.get(hira_field) if dict_lang == "jp" else None,
+                "meanings": [],
+                "english": [],
+            })
 
-        result = {
-            "word": row[text_field],
-            "hiragana": row.get(hira_field) if dict_lang == "jp" else None,
-            "meanings": [],
-            "english": [],
-        }
+    # ✅ 批量反查 Definition 表，防止 N+1 查询
+    if dict_lang == "fr":
+        from app.models import DefinitionFr  # 避免循环导入
+        word_ids = [r["id"] for r in results]
+        defs = await DefinitionFr.filter(word_id__in=word_ids).values("word_id", "meaning", "eng_explanation")
 
-        # ✅ 若为法语，则反查 DefinitionFr 的英文释义
-        if dict_lang == "fr":
-            # 获取关联的 definitions
-            word_obj = await model.get(id=row["id"]).prefetch_related("definitions")
-            english_list = [
-                d.eng_explanation.strip()
-                for d in word_obj.definitions
-                if d.eng_explanation and d.eng_explanation.strip()
-            ]
-            result["english"] = list(set(english_list))
+        meaning_map: Dict[int, Dict[str, List[str]]] = {}
+        for d in defs:
+            meaning_map.setdefault(d["word_id"], {"meanings": [], "english": []})
+            if d["meaning"]:
+                meaning_map[d["word_id"]]["meanings"].append(d["meaning"].strip())
+            if d["eng_explanation"]:
+                meaning_map[d["word_id"]]["english"].append(d["eng_explanation"].strip())
 
-        results.append(result)
+        for r in results:
+            if r["id"] in meaning_map:
+                r["meanings"] = list(set(meaning_map[r["id"]]["meanings"]))
+                r["english"] = list(set(meaning_map[r["id"]]["english"]))
+
+    elif dict_lang == "jp":
+        from app.models import DefinitionJp
+        word_ids = [r["id"] for r in results]
+        defs = await DefinitionJp.filter(word_id__in=word_ids).values("word_id", "meaning")
+
+        meaning_map: Dict[int, List[str]] = {}
+        for d in defs:
+            if d["meaning"]:
+                meaning_map.setdefault(d["word_id"], []).append(d["meaning"].strip())
+
+        for r in results:
+            if r["id"] in meaning_map:
+                r["meanings"] = list(set(meaning_map[r["id"]]))
+
+    # ✅ 删除 id，只保留用户需要字段
+    for r in results:
+        r.pop("id", None)
 
     return results[:limit]
 
