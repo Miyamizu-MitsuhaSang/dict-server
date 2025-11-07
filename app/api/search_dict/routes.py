@@ -191,12 +191,6 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
             )
         elif search_lang == "zh":
             word_contents = []
-            if transable:
-                word_contents = await service.suggest_autocomplete(
-                    query=query,
-                    dict_lang="jp",
-                    model=WordlistJp,
-                )
             word_contents.extend(
                 await service.search_definition_by_meaning(
                     query=query_word.query,
@@ -204,6 +198,12 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
                     lang="zh",
                 )
             )
+            if transable:
+                word_contents = await service.suggest_autocomplete(
+                    query=query,
+                    dict_lang="jp",
+                    model=WordlistJp,
+                )
         else:
             word_contents = await service.suggest_autocomplete(
                 query=query,
