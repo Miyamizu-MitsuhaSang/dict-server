@@ -7,6 +7,7 @@ from starlette.requests import Request
 from app.api.ai_assist import service
 from app.api.ai_assist.ai_schemas import AIAnswerResponse, AIAnswerOut, AIQuestionRequest
 from app.api.ai_assist.utils.redis_memory import get_chat_history, save_message, clear_chat_history
+from app.api.article_director.service import reply_process
 from app.models import User
 from app.utils.security import get_current_user
 from settings import settings
@@ -85,9 +86,11 @@ async def dict_exp(
             await save_message(redis, user_id, word, "user", question)
             await save_message(redis, user_id, word, "assistant", answer)
 
+            answer = await reply_process(answer)
+
             return AIAnswerOut(
                 word=word,
-                answer=ai_resp.get_answer(),
+                answer=answer,
                 model=ai_resp.model,
                 tokens_used=ai_resp.usage.total_tokens if ai_resp.usage else None
             )

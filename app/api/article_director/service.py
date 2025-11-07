@@ -78,4 +78,5 @@ async def reply_process(reply: str) -> str:
     :return:
     """
     reply.replace("**", "")
+    reply.replace("---", "")
     return reply
