@@ -1,4 +1,3 @@
-import os
 from typing import Dict, Tuple
 
 import httpx
@@ -10,11 +9,12 @@ from app.api.ai_assist.ai_schemas import AIAnswerResponse, AIAnswerOut, AIQuesti
 from app.api.ai_assist.utils.redis_memory import get_chat_history, save_message, clear_chat_history
 from app.models import User
 from app.utils.security import get_current_user
+from settings import settings
 
 ai_router = APIRouter()
 
 ZJU_AI_URL = 'https://chat.zju.edu.cn/api/ai/v1/chat/completions'
-AI_API_KEY = os.getenv("AI_ASSIST_KEY")
+AI_API_KEY = settings.AI_ASSIST_KEY
 MAX_USAGE_PER = 100
 
 CHAT_TTL = 7200
