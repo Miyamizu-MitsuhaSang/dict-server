@@ -31,7 +31,13 @@ async def article_director(
     redis = request.app.state.redis
     # print(upload_article)
 
-    article_lang = "法语" if lang == "fr-FR" else "日语"
+    match lang:
+        case "en-US":
+            article_lang = "英语"
+        case "fr-FR":
+            article_lang = "法语"
+        case _:
+            article_lang = "日语"
 
     user_id = user[0].id
     article = upload_article.content
