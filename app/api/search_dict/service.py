@@ -77,6 +77,61 @@ async def accurate_idiom_proverb(search_id: int, model: Type[Model], only_fields
     return result
 
 
+async def suggest_proverb(
+        query: str,
+        lang: Literal["fr", "zh", "jp"],
+        model: Type[Model],
+        search_field: str = "search_text",
+        target_field: str = "text",
+        chi_exp_field: str = "chi_exp",
+        limit: int = 10,
+) -> List[Dict[str, str]]:
+    keyword = query.strip()
+    if not keyword:
+        return []
+
+    # ✅ 搜索条件：中文时双字段联合匹配
+    if lang == "zh":
+        start_condition = Q(**{f"{chi_exp_field}__istartswith": keyword}) | Q(
+            **{f"{search_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{chi_exp_field}__icontains": keyword}) | Q(**{f"{search_field}__icontains": keyword})
+    else:
+        start_condition = Q(**{f"{search_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{search_field}__icontains": keyword})
+
+    # ✅ 1. 开头匹配
+    start_matches = await (
+        model.filter(start_condition)
+        .order_by("-freq", "id")
+        .limit(limit)
+        .values("id", target_field, chi_exp_field, "search_text")
+    )
+
+    # ✅ 2. 包含匹配（但不是开头）
+    contain_matches = await (
+        model.filter(contain_condition & ~start_condition)
+        .order_by("-freq", "id")
+        .limit(limit)
+        .values("id", target_field, chi_exp_field, "search_text")
+    )
+
+    # ✅ 3. 合并去重保持顺序
+    results = []
+    seen_ids = set()
+    for row in start_matches + contain_matches:
+        if row["id"] not in seen_ids:
+            seen_ids.add(row["id"])
+            results.append({
+                "id": row["id"],
+                "proverb": row[target_field],
+                "search_text": row["search_text"],
+                "chi_exp": row[chi_exp_field],
+            })
+
+    # ✅ 截断最终返回数量
+    return results[:limit]
+
+
 async def suggest_autocomplete(
         query: str,
         dict_lang: Literal["fr", "jp"],
