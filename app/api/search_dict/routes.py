@@ -6,11 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from app.api.search_dict import service
 from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
     ProverbSearchRequest
-from app.api.search_dict.service import suggest_autocomplete
 from app.api.word_comment.word_comment_schemas import CommentSet
-from app.models import DefinitionJp, CommentFr, CommentJp
+from app.models import DefinitionJp, CommentFr, CommentJp, WordlistFr
 from app.models.fr import DefinitionFr, ProverbFr
-from app.models.jp import IdiomJp
+from app.models.jp import IdiomJp, WordlistJp
 from app.utils.all_kana import all_in_kana
 from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
@@ -158,8 +157,61 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
     :return: 待选列表
     """
     # print(query_word.query, query_word.language, query_word.sort, query_word.order)
-    word_contents = await suggest_autocomplete(query=query_word)
-    return {"list": word_contents}
+    query = query_word.query
+    lang = query_word.language
+    query, search_lang, transable = await service.detect_language(text=query)
+    word_contents = []
+    if lang == "fr":
+        if search_lang == "fr":
+            word_contents = await service.suggest_autocomplete(
+                query=query,
+                dict_lang="fr",
+                model=WordlistFr,
+            )
+            if not transable:
+                word_contents.extend(
+                    await service.search_definition_by_meaning(
+                        query=query,
+                        model=DefinitionFr,
+                        lang="en",
+                    )
+                )
+        else:
+            word_contents = await service.search_definition_by_meaning(
+                query=query_word.query,
+                model=DefinitionFr,
+                lang="zh",
+            )
+    else:
+        if search_lang == "jp":
+            word_contents = await service.suggest_autocomplete(
+                query=query,
+                dict_lang="jp",
+                model=WordlistJp,
+            )
+        elif search_lang == "zh":
+            word_contents = []
+            if transable:
+                word_contents = await service.suggest_autocomplete(
+                    query=query,
+                    dict_lang="jp",
+                    model=WordlistJp,
+                )
+            word_contents.extend(
+                await service.search_definition_by_meaning(
+                    query=query_word.query,
+                    model=DefinitionJp,
+                    lang="zh",
+                )
+            )
+        else:
+            word_contents = await service.suggest_autocomplete(
+                query=query,
+                dict_lang="jp",
+                model=WordlistJp,
+            )
+    suggest_list = service.merge_word_results(word_contents)
+    return {"list": suggest_list}
 
 
 @dict_search.post("/search/list/proverb")
@@ -177,7 +229,8 @@ async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get
 
 @dict_search.post("/search/proverb")
 async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_user)):
-    result = await service.accurate_idiom_proverb(search_id=proverb_id, model=ProverbFr, only_fields=["text", "chi_exp"])
+    result = await service.accurate_idiom_proverb(search_id=proverb_id, model=ProverbFr,
+                                                  only_fields=["text", "chi_exp"])
 
     return {"result": result}
 
@@ -225,5 +278,6 @@ async def search_idiom_list(query_idiom: ProverbSearchRequest, user=Depends(get_
 
 @dict_search.post("/search/idiom")
 async def search_idiom(query_id: int, user=Depends(get_current_user)):
-    result = await service.accurate_idiom_proverb(search_id=query_id, model=IdiomJp, only_fields=["id", "text", "search_text", "chi_exp", "example"])
+    result = await service.accurate_idiom_proverb(search_id=query_id, model=IdiomJp,
+                                                  only_fields=["id", "text", "search_text", "chi_exp", "example"])
     return {"result": result}

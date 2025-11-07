@@ -362,28 +362,73 @@ Authorization: Bearer <your_jwt_token>
 #### 2.3 单词联想建议
 
 - **接口**: `POST /api/search/list/word`
-- **描述**: 根据用户输入返回单词联想列表，含前缀匹配与包含匹配。
+- **描述**: 返回智能联想候选列表。后端会根据 `language`（当前词典）与用户输入自动切换检索策略，综合“前缀匹配”和“释义反查”两种来源，并对结果去重合并释义。
 - **需要认证**: 是
 - **请求体**:
 
 ```json
 {
   "query": "bon",
-  "language": "fr",
-  "sort": "relevance",
-  "order": "des"
+  "language": "fr"
 }
 ```
 
-- **响应示例**:
+- **检索规则**:
+    - `language = "fr"`:
+        - 法语/拉丁字符输入：优先使用 `WordlistFr` 做前缀 + 包含匹配。
+        - 中文输入：回退到法语释义的中文字段做反查。
+        - 英文输入：会优先使用英文释义字段做反查，方便“英文 → 法语”场景。
+    - `language = "jp"`:
+        - 假名或日文汉字：直接在 `WordlistJp` 做前缀 + 包含匹配，同时返回假名字段。
+        - 中文输入：优先用中文释义反查；若该中文词条存在汉字映射，则并行检索对应的日语原词并放在结果前列。
+
+- **响应字段**:
+    - `word`: 词条原文（法语或日语）
+    - `hiragana`: 仅日语结果携带；法语为 `null`
+    - `meanings`: 中文释义去重数组（当结果来自释义反查时才会出现）
+    - `english`: 英文释义去重数组（仅法语词典且按英文释义反查时出现）
+
+- **响应示例（法语）**:
 
 ```json
 {
-  "list": ["bonjour", "bonsoir", "bonheur"]
+  "list": [
+    {
+      "word": "bonjour",
+      "hiragana": null,
+      "meanings": ["你好", "问候语"],
+      "english": ["hello"]
+    },
+    {
+      "word": "bonsoir",
+      "hiragana": null,
+      "meanings": [],
+      "english": []
+    }
+  ]
 }
 ```
 
-> **说明**: `language = "jp"` 时返回形如 `[["愛", "あい"], ["愛する", "あいする"]]` 的二维数组，第二列为假名读音。
+- **响应示例（日语，中文反查）**:
+
+```json
+{
+  "list": [
+    {
+      "word": "愛",
+      "hiragana": "あい",
+      "meanings": ["爱；爱意"],
+      "english": []
+    },
+    {
+      "word": "愛する",
+      "hiragana": "あいする",
+      "meanings": ["热爱；深爱"],
+      "english": []
+    }
+  ]
+}
+```
 
 - **状态码**:
     - `200`: 查询成功

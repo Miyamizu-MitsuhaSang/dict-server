@@ -1,15 +1,13 @@
 import re
-from typing import List, Tuple, Dict, Literal, Type
+from typing import List, Tuple, Dict, Literal, Type, Any
 
 from fastapi import HTTPException
 from redis.asyncio import Redis
 from tortoise import Tortoise, Model
 from tortoise.expressions import Q
 
-from app.api.search_dict.search_schemas import SearchRequest, ProverbSearchRequest
-from app.models import WordlistFr, WordlistJp, KangjiMapping
+from app.models import KangjiMapping
 from app.utils.all_kana import all_in_kana
-from app.utils.textnorm import normalize_text
 from settings import TORTOISE_ORM
 
 
@@ -57,8 +55,12 @@ async def detect_language(text: str) -> Tuple[str, str, bool]:
         return text, "zh", False
 
     # ✅ Step 3: 拉丁字母检测（如法语）
-    if re.search(r"[a-zA-ZÀ-ÿ]", text):
-        return text, "fr", False
+    if re.search(r"[À-ÿ]", text):
+        return text, "fr", True  # True → 含拉丁扩展（非英语）
+
+    # 全部为纯英文字符
+    elif re.fullmatch(r"[a-zA-Z]+", text):
+        return text, "fr", False  # False → 英语单词
 
     # ✅ Step 4: 其他情况（符号、空格等）
     return text, "other", False
@@ -75,170 +77,229 @@ async def accurate_idiom_proverb(search_id: int, model: Type[Model], only_fields
     return result
 
 
-async def suggest_proverb(
+async def suggest_autocomplete(
         query: str,
-        lang: Literal["fr", "zh", "jp"],
+        dict_lang: Literal["fr", "jp"],
         model: Type[Model],
         search_field: str = "search_text",
-        target_field: str = "text",
-        chi_exp_field: str = "chi_exp",
+        text_field: str = "text",
+        hira_field: str = "hiragana",
+        freq_field: str = "freq",
+        english_field: str = "eng_explanation",
         limit: int = 10,
 ) -> List[Dict[str, str]]:
+    """
+    通用自动补全建议接口（增强版）：
+    - 法语: 按 search_text / text 搜索，同时反查 DefinitionFr 的英文释义
+    - 日语: 先按原文 text 匹配，再按假名 search_text 匹配
+    统一返回结构：
+    [
+        {
+            "word": "étudier",
+            "hiragana": None,
+            "meanings": [],
+            "english": ["to study", "to learn"]
+        }
+    ]
+    """
     keyword = query.strip()
     if not keyword:
         return []
 
-    # ✅ 搜索条件：中文时双字段联合匹配
-    if lang == "zh":
-        start_condition = Q(**{f"{chi_exp_field}__istartswith": keyword}) | Q(
-            **{f"{search_field}__istartswith": keyword})
-        contain_condition = Q(**{f"{chi_exp_field}__icontains": keyword}) | Q(**{f"{search_field}__icontains": keyword})
+    # ========== 法语 ==========
+    if dict_lang == "fr":
+        start_condition = Q(**{f"{search_field}__istartswith": keyword}) | Q(**{f"{text_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{search_field}__icontains": keyword}) | Q(**{f"{text_field}__icontains": keyword})
+        value_fields = ["id", text_field, freq_field, search_field]
+
+    # ========== 日语 ==========
+    elif dict_lang == "jp":
+        kana_word = all_in_kana(keyword)
+        start_condition = Q(**{f"{text_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{text_field}__icontains": keyword})
+
+        kana_start = Q(**{f"{hira_field}__istartswith": kana_word})
+        kana_contain = Q(**{f"{hira_field}__icontains": kana_word})
+
+        start_condition |= kana_start
+        contain_condition |= kana_contain
+        value_fields = ["id", text_field, hira_field, freq_field]
+
     else:
-        start_condition = Q(**{f"{search_field}__istartswith": keyword})
-        contain_condition = Q(**{f"{search_field}__icontains": keyword})
+        return []
 
     # ✅ 1. 开头匹配
     start_matches = await (
         model.filter(start_condition)
-        .order_by("-freq", "id")
+        .order_by(f"-{freq_field}", "id")
         .limit(limit)
-        .values("id", target_field, chi_exp_field, "search_text")
+        .values(*value_fields)
     )
 
-    # ✅ 2. 包含匹配（但不是开头）
+    # ✅ 2. 包含匹配
     contain_matches = await (
         model.filter(contain_condition & ~start_condition)
-        .order_by("-freq", "id")
+        .order_by(f"-{freq_field}", "id")
         .limit(limit)
-        .values("id", target_field, chi_exp_field, "search_text")
+        .values(*value_fields)
     )
 
-    # ✅ 3. 合并去重保持顺序
+    # ✅ 3. 合并去重
     results = []
     seen_ids = set()
     for row in start_matches + contain_matches:
-        if row["id"] not in seen_ids:
-            seen_ids.add(row["id"])
-            results.append({
-                "id": row["id"],
-                "proverb": row[target_field],
-                "search_text": row["search_text"],
-                "chi_exp": row[chi_exp_field],
-            })
+        if row["id"] in seen_ids:
+            continue
+        seen_ids.add(row["id"])
 
-    # ✅ 截断最终返回数量
+        result = {
+            "word": row[text_field],
+            "hiragana": row.get(hira_field) if dict_lang == "jp" else None,
+            "meanings": [],
+            "english": [],
+        }
+
+        # ✅ 若为法语，则反查 DefinitionFr 的英文释义
+        if dict_lang == "fr":
+            # 获取关联的 definitions
+            word_obj = await model.get(id=row["id"]).prefetch_related("definitions")
+            english_list = [
+                d.eng_explanation.strip()
+                for d in word_obj.definitions
+                if d.eng_explanation and d.eng_explanation.strip()
+            ]
+            result["english"] = list(set(english_list))
+
+        results.append(result)
+
     return results[:limit]
 
 
-async def suggest_autocomplete(query: SearchRequest, limit: int = 10):
+# ===================================================
+# ✅ 释义反查接口（返回统一结构）
+# ===================================================
+
+async def search_definition_by_meaning(
+        query: str,
+        model: Type[Model],
+        meaning_field: str = "meaning",
+        eng_field: str = "eng_explanation",
+        hira_field: str = "hiragana",
+        limit: int = 20,
+        lang: Literal["zh", "en"] = "zh",
+) -> List[Dict[str, str]]:
+    """
+    双语释义反查接口（中文/英文）：
+    统一返回结构：
+    [
+        {
+            "word": "étudier",
+            "hiragana": None,
+            "meanings": ["学习", "研究"],
+            "english": ["to study"]
+        }
+    ]
     """
 
-    :param query: 当前用户输入的内容
-    :param limit: 返回列表限制长度
-    :return: 联想的单词列表（非完整信息，单纯单词）
-    """
-    if query.language == 'fr':
-        query_word = normalize_text(query.query)
-        exact = await (
-            WordlistFr
-            .get_or_none(search_text=query.query)
-            .values("text", "freq")
-        )
-        if exact:
-            exact_word = [(exact.get("text"), exact.get("freq"))]
-        else:
-            exact_word = []
+    keyword = query.strip()
+    if not keyword:
+        return []
 
-        qs_prefix = (
-            WordlistFr
-            .filter(Q(search_text__startswith=query_word) | Q(text__startswith=query.query))
-            .exclude(search_text=query.query)
-            .only("text", "freq")
-        )
-        prefix_objs = await qs_prefix[:limit]
-        prefix: List[Tuple[str, int]] = [(o.text, o.freq) for o in prefix_objs]
-
-        need = max(0, limit - len(prefix))
-        contains: List[Tuple[str, int]] = []
-
-        if need > 0:
-            qs_contain = (
-                WordlistFr
-                .filter(Q(search_text__icontains=query_word) | Q(text__icontains=query.query))
-                .exclude(Q(search_text__startswith=query_word) | Q(text__startswith=query.query) | Q(text=query.query))
-                .only("text", "freq")
-                .only("text", "freq")
-            )
-            contains_objs = await qs_contain[: need * 2]
-            contains = [(o.text, o.freq) for o in contains_objs]
-
-            seen_text, out = set(), []
-            for text, freq in list(exact_word) + list(prefix) + list(contains):
-                key = text
-                if key not in seen_text:
-                    seen_text.add(key)
-                    out.append((text, freq))
-                if len(out) >= limit:
-                    break
-            out = sorted(out, key=lambda w: (-w[2], len(w[0]), w[0]))
-            return [text for text, _ in out]
-
+    if lang == "zh":
+        search_field = meaning_field
+    elif lang == "en":
+        search_field = eng_field
     else:
-        query_word = all_in_kana(query.query)
-        exact = await (
-            WordlistJp
-            .get_or_none(
-                text=query.query
-            )
-            .only("text", "hiragana", "freq")
-        )
-        if exact:
-            exact_word = [(exact.text, exact.hiragana, exact.freq)]
-        else:
-            exact_word = []
+        raise ValueError("lang 参数必须为 'zh' 或 'en'")
 
-        qs_prefix = (
-            WordlistJp
-            .filter(Q(hiragana__startswith=query_word) | Q(text__startswith=query.query))
-            .exclude(text=query.query)
-            .only("text", "hiragana", "freq")
-        )
-        prefix_objs = await qs_prefix[:limit]
-        prefix: List[Tuple[str, str, int]] = [(o.text, o.hiragana, o.freq) for o in prefix_objs]
+    contain_condition = Q(**{f"{search_field}__icontains": keyword})
 
-        need = max(0, limit - len(prefix))
-        contains: List[Tuple[str, str, int]] = []
-
-        if need > 0:
-            qs_contain = await (
-                WordlistJp
-                .filter(Q(hiragana__icontains=query_word) | Q(text__icontains=query.query))
-                .exclude(Q(hiragana__startswith=query_word) | Q(text__startswith=query.query) | Q(text=query.query))
-                .only("text", "hiragana", "freq")
-            )
-            contains_objs = qs_contain[:need * 2]
-            contains: List[Tuple[str, str, int]] = [(o.text, o.hiragana, o.freq) for o in contains_objs]
-
-        seen_text, out = set(), []
-        for text, hiragana, freq in list(exact_word) + list(prefix) + list(contains):
-            key = (text, hiragana)
-            if key not in seen_text:
-                seen_text.add(key)
-                out.append((text, hiragana, freq))
-            if len(out) >= limit:
-                break
-        out = sorted(out, key=lambda w: (-w[2], len(w[0]), w[0]))
-        return [(text, hiragana) for text, hiragana, _ in out]
-
-
-async def __test():
-    query_word: str = '棋逢'
-    return await (
-        suggest_proverb(
-            query=ProverbSearchRequest(query=query_word),
-            lang='zh'
-        )
+    matches = (
+        await model.filter(contain_condition)
+        .prefetch_related("word")
+        .order_by("id")
     )
+
+    word_to_data: Dict[str, Dict[str, List[str] | str | None]] = {}
+
+    for entry in matches:
+        word_obj = await entry.word
+        word_text = getattr(word_obj, "text", None)
+        if not word_text:
+            continue
+
+        chi_mean = getattr(entry, meaning_field, "").strip() or None
+        eng_mean = getattr(entry, eng_field, "").strip() or None
+        hira_text = getattr(word_obj, hira_field, None) if hasattr(word_obj, hira_field) else None
+
+        if word_text not in word_to_data:
+            word_to_data[word_text] = {"hiragana": hira_text, "meanings": [], "english": []}
+
+        if chi_mean:
+            word_to_data[word_text]["meanings"].append(chi_mean)
+        if eng_mean:
+            word_to_data[word_text]["english"].append(eng_mean)
+
+    results = []
+    for word, data in word_to_data.items():
+        results.append({
+            "word": word,
+            "hiragana": data["hiragana"],
+            "meanings": list(set(data["meanings"])),
+            "english": list(set(data["english"]))
+        })
+
+    return results[:limit]
+
+
+def merge_word_results(*lists: List[Dict[str, Any]]) -> List[Dict[str, object]]:
+    """
+    合并多个结果列表并去重：
+    - 依据 word（+ hiragana）唯一性去重
+    - meanings / english 合并去重
+    - 保留最早出现的顺序
+    """
+    merged: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+
+    for lst in lists:
+        for item in lst:
+            word = item.get("word")
+            hira = item.get("hiragana")
+            key = f"{word}:{hira or ''}"  # 以 word+hiragana 作为唯一标识
+
+            if key not in merged:
+                # 初次出现，加入结果集
+                merged[key] = {
+                    "word": word,
+                    "hiragana": hira,
+                    "meanings": list(item.get("meanings", [])),
+                    "english": list(item.get("english", []))
+                }
+                order.append(key)
+            else:
+                # 已存在 → 合并释义和英文解释
+                merged[key]["meanings"] = list(set(
+                    list(merged[key].get("meanings", [])) +
+                    list(item.get("meanings", []) or [])
+                ))
+                merged[key]["english"] = list(set(
+                    list(merged[key].get("english", [])) +
+                    list(item.get("english", []) or [])
+                ))
+
+    # 保持插入顺序输出
+    return [merged[k] for k in order]
+
+
+# async def __test():
+#     query_word: str = '棋逢'
+#     return await (
+#         suggest_proverb(
+#             query=ProverbSearchRequest(query=query_word),
+#             lang='zh'
+#         )
+#     )
 
 
 async def __main():
