@@ -92,9 +92,8 @@ async def suggest_proverb(
 
     # ✅ 搜索条件：中文时双字段联合匹配
     if lang == "zh":
-        start_condition = Q(**{f"{chi_exp_field}__istartswith": keyword}) | Q(
-            **{f"{search_field}__istartswith": keyword})
-        contain_condition = Q(**{f"{chi_exp_field}__icontains": keyword}) | Q(**{f"{search_field}__icontains": keyword})
+        start_condition = Q(**{f"{chi_exp_field}__istartswith": keyword})
+        contain_condition = Q(**{f"{chi_exp_field}__icontains": keyword})
     else:
         start_condition = Q(**{f"{search_field}__istartswith": keyword})
         contain_condition = Q(**{f"{search_field}__icontains": keyword})

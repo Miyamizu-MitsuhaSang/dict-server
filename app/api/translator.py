@@ -1,4 +1,3 @@
-import json
 import random
 from typing import Tuple, Dict
 
@@ -79,7 +78,7 @@ async def baidu_translation(query: str, from_lang: str, to_lang: str):
         raise HTTPException(status_code=500, detail=response.json())
 
     data = response.json()
-    print(json.dumps(data, indent=2, ensure_ascii=False))
+    # print(json.dumps(data, indent=2, ensure_ascii=False))
 
     if "trans_result" not in data:
         raise HTTPException(status_code=500, detail={"error_code": data.get("error_code"), "error_msg": data.get("error_msg")})

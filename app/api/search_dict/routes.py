@@ -268,7 +268,7 @@ async def search_idiom_list(
             )
             tasks.append(
                 service.suggest_proverb(
-                    query=query,
+                    query=all_in_kana(query),
                     lang="jp",
                     model=IdiomJp,
                     search_field="search_text",
@@ -294,7 +294,6 @@ async def search_idiom_list(
                 query=query,
                 lang="zh",
                 model=IdiomJp,
-                search_field="search_text",
                 target_field="text",
             )
         )
@@ -306,6 +305,14 @@ async def search_idiom_list(
                     lang="jp",
                     model=IdiomJp,
                     search_field="text",
+                )
+            )
+            tasks.append(
+                service.suggest_proverb(
+                    query=all_in_kana(mapping_query),
+                    lang="jp",
+                    model=IdiomJp,
+                    search_field="search_text",
                 )
             )
 
