@@ -250,14 +250,12 @@ async def search_idiom_list(
     mapping_query, lang, is_kangji = await service.detect_language(text=query_idiom.query)
     query = query_idiom.query
 
-    # 初始化任务列表
+    # 初始化任务列表（后续依任务顺序返回）
     tasks = []
 
-    # ✅ 分类逻辑入口
     # --- 1️⃣ 日语输入 ---
     if lang == "jp":
         if is_kangji:
-            # 有汉字的日语词 → 进行 text + search_text 双字段匹配
             tasks.append(
                 service.suggest_proverb(
                     query=query,
@@ -276,7 +274,6 @@ async def search_idiom_list(
                 )
             )
         else:
-            # 平假名或片假名纯日文
             tasks.append(
                 service.suggest_proverb(
                     query=query,
@@ -287,17 +284,9 @@ async def search_idiom_list(
                 )
             )
 
-    # --- 2️⃣ 中文输入 ---
+    # --- 2️⃣ 中文输入（调整优先级） ---
     elif lang == "zh":
-        tasks.append(
-            service.suggest_proverb(
-                query=query,
-                lang="zh",
-                model=IdiomJp,
-                target_field="text",
-            )
-        )
-        # 若输入为汉字，可能存在对应的日语原型（mapping_query）
+        # ✅ (1) 若存在映射：mapping_query 优先匹配日语原型（text）
         if is_kangji and mapping_query:
             tasks.append(
                 service.suggest_proverb(
@@ -307,6 +296,19 @@ async def search_idiom_list(
                     search_field="text",
                 )
             )
+
+        # ✅ (2) 然后匹配中文释义（chi_exp 或 search_text）
+        tasks.append(
+            service.suggest_proverb(
+                query=query,
+                lang="zh",
+                model=IdiomJp,
+                target_field="text",
+            )
+        )
+
+        # ✅ (3) 最后用假名匹配映射（辅助补全）
+        if is_kangji and mapping_query:
             tasks.append(
                 service.suggest_proverb(
                     query=all_in_kana(mapping_query),
@@ -328,21 +330,21 @@ async def search_idiom_list(
             )
         )
 
-    # ✅ 并发执行任务
+    # ✅ 并发执行任务（结果顺序与任务定义顺序一致）
     results = await asyncio.gather(*tasks)
 
-    # ✅ 结果合并
-    if not results:
-        return {"list": []}
-
-    merged = []
+    # ✅ 顺序合并 + 稳定去重
+    seen = set()
+    ordered_unique = []
     for res in results:
-        merged.extend(res)
+        for item in res:
+            key = item.get("proverb") or item.get("text")
+            if key and key not in seen:
+                seen.add(key)
+                ordered_unique.append(item)
 
-    # ✅ 去重（如果你希望返回唯一成语）
-    unique_list = {item["proverb"]: item for item in merged}.values()
+    return {"list": ordered_unique}
 
-    return {"list": list(unique_list)}
 
 
 @dict_search.post("/search/idiom")
