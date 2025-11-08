@@ -333,7 +333,7 @@ async def search_idiom_list(
         merged.extend(res)
 
     # ✅ 去重（如果你希望返回唯一成语）
-    unique_list = {item["text"]: item for item in merged}.values()
+    unique_list = {item["proverb"]: item for item in merged}.values()
 
     return {"list": list(unique_list)}
 
