@@ -5,8 +5,8 @@ from pydantic import BaseModel, field_validator, model_validator
 
 class TransRequest(BaseModel):
     query: str
-    from_lang: Literal['auto', 'fr', 'jp', 'zh', 'en'] = 'auto'
-    to_lang: Literal['fr', 'jp', 'zh', 'en'] = 'zh'
+    from_lang: Literal['auto', 'fra', 'jp', 'zh', 'en'] = 'auto'
+    to_lang: Literal['fra', 'jp', 'zh', 'en'] = 'zh'
 
     @field_validator('from_lang', 'to_lang')
     @classmethod

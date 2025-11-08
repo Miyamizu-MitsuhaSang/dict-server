@@ -15,8 +15,6 @@ from settings import settings
 translator_router = APIRouter()
 
 # For list of language codes, please refer to `https://api.fanyi.baidu.com/doc/21`
-from_lang = 'en'
-to_lang = 'zh'
 
 
 # endpoint = 'https://api.fanyi.baidu.com'
