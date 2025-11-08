@@ -230,7 +230,7 @@ async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get
 @dict_search.post("/search/proverb")
 async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_user)):
     result = await service.accurate_idiom_proverb(search_id=proverb_id, model=ProverbFr,
-                                                  only_fields=["text", "chi_exp"])
+                                                  only_fields=["id", "text", "chi_exp"])
 
     return {"result": result}
 
