@@ -237,44 +237,105 @@ async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_u
 
 
 @dict_search.post("/search/list/idiom")
-async def search_idiom_list(query_idiom: ProverbSearchRequest, user=Depends(get_current_user)):
+async def search_idiom_list(
+        query_idiom: ProverbSearchRequest,
+        user=Depends(get_current_user)
+):
+    """日语成语检索接口（带语言检测与分类逻辑）"""
+
     if query_idiom.dict_language == "fr":
         raise HTTPException(status_code=400, detail="Dict language Error")
 
+    # 语言检测
     mapping_query, lang, is_kangji = await service.detect_language(text=query_idiom.query)
     query = query_idiom.query
 
-    # ✅ 并发任务列表
-    tasks = [
-        service.suggest_proverb(
-            query=query,
-            lang=lang,
-            model=IdiomJp,
-            search_field="search_text",
-            target_field="text",
-        )
-    ]
+    # 初始化任务列表
+    tasks = []
 
-    if lang == "zh" and is_kangji:
-        # jp_query = all_in_kana(text=query_idiom.query)
+    # ✅ 分类逻辑入口
+    # --- 1️⃣ 日语输入 ---
+    if lang == "jp":
+        if is_kangji:
+            # 有汉字的日语词 → 进行 text + search_text 双字段匹配
+            tasks.append(
+                service.suggest_proverb(
+                    query=query,
+                    lang="jp",
+                    model=IdiomJp,
+                    search_field="text",
+                )
+            )
+            tasks.append(
+                service.suggest_proverb(
+                    query=query,
+                    lang="jp",
+                    model=IdiomJp,
+                    search_field="search_text",
+                    target_field="text",
+                )
+            )
+        else:
+            # 平假名或片假名纯日文
+            tasks.append(
+                service.suggest_proverb(
+                    query=query,
+                    lang="jp",
+                    model=IdiomJp,
+                    search_field="search_text",
+                    target_field="text",
+                )
+            )
+
+    # --- 2️⃣ 中文输入 ---
+    elif lang == "zh":
         tasks.append(
             service.suggest_proverb(
-                query=mapping_query,
+                query=query,
+                lang="zh",
+                model=IdiomJp,
+                search_field="search_text",
+                target_field="text",
+            )
+        )
+        # 若输入为汉字，可能存在对应的日语原型（mapping_query）
+        if is_kangji and mapping_query:
+            tasks.append(
+                service.suggest_proverb(
+                    query=mapping_query,
+                    lang="jp",
+                    model=IdiomJp,
+                    search_field="text",
+                )
+            )
+
+    # --- 3️⃣ 其他语言（默认回退） ---
+    else:
+        tasks.append(
+            service.suggest_proverb(
+                query=query,
                 lang="jp",
                 model=IdiomJp,
-                search_field="text",
+                search_field="search_text",
+                target_field="text",
             )
         )
 
-    # ✅ 并发执行（返回结果顺序与任务顺序一致）
+    # ✅ 并发执行任务
     results = await asyncio.gather(*tasks)
 
-    # ✅ 合并结果
-    result = results[0]
-    if len(results) > 1:
-        result[:0] = results[1]  # 将中文映射查询结果插到最前面
+    # ✅ 结果合并
+    if not results:
+        return {"list": []}
 
-    return {"list": result}
+    merged = []
+    for res in results:
+        merged.extend(res)
+
+    # ✅ 去重（如果你希望返回唯一成语）
+    unique_list = {item["text"]: item for item in merged}.values()
+
+    return {"list": list(unique_list)}
 
 
 @dict_search.post("/search/idiom")
