@@ -11,7 +11,7 @@ class TransRequest(BaseModel):
     @field_validator('from_lang', 'to_lang')
     @classmethod
     def validate_lang(cls, v):
-        allowed_langs = {'auto', 'fr', 'jp', 'zh', 'en'}
+        allowed_langs = {'auto', 'fra', 'jp', 'zh', 'en'}
         if v not in allowed_langs:
             raise ValueError(f'Unsupported language: {v}')
         return v

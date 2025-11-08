@@ -544,8 +544,8 @@ Authorization: Bearer <your_jwt_token>
 
 - **请求参数说明**:
     - `query`: 待翻译的文本
-    - `from_lang`: 源语言，支持值: `auto`(自动检测), `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
-    - `to_lang`: 目标语言，支持值: `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
+    - `from_lang`: 源语言，支持值: `auto`(自动检测), `fra`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
+    - `to_lang`: 目标语言，支持值: `fra`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
 
 - **响应**:
 
