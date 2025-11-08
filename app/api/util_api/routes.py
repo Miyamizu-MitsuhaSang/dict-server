@@ -17,3 +17,13 @@ async def get_search_time(request: Request):
     return {
         "count": int(count),
     }
+
+@ulit_router.get("/search/reset", tags=["search times reset"])
+async def reset_search_time(request: Request):
+    redis = request.app.state.redis
+    key = f"search_time"
+
+    count = await redis.set(key, 0)
+    return {
+        "message": "search times reset successfully",
+    }
