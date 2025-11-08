@@ -32,6 +32,7 @@ class WordSearchResponse(BaseModel):
     query: str
     pos: list
     contents: Union[List[SearchItemFr], List[SearchItemJp]]
+    hiragana : str
 
 
 class ProverbSearchResponse(BaseModel):

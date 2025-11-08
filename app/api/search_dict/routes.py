@@ -142,6 +142,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
             query=query,
             pos=pos_contents,
             contents=contents,
+            hiragana=query_kana,
         )
 
 

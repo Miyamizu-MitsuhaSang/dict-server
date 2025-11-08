@@ -326,7 +326,8 @@ Authorization: Bearer <your_jwt_token>
       "chi_exp": "日语；日本的语言",
       "example": "日本語を勉強しています。"
     }
-  ]
+  ],
+  "hiragana": ["假名注音"]
 }
 ```
 
