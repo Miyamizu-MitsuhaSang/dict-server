@@ -375,6 +375,7 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 - **检索规则**:
+    - 匹配逻辑采用 `icontains` 与 `istartswith` 模式，大小写不敏感。
     - `language = "fr"`:
         - 法语/拉丁字符输入：优先使用 `WordlistFr` 做前缀 + 包含匹配。
         - 中文输入：回退到法语释义的中文字段做反查。
@@ -544,8 +545,8 @@ Authorization: Bearer <your_jwt_token>
 
 - **请求参数说明**:
     - `query`: 待翻译的文本
-    - `from_lang`: 源语言，支持值: `auto`(自动检测), `fra`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
-    - `to_lang`: 目标语言，支持值: `fra`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
+    - `from_lang`: 源语言，支持值: `auto`(自动检测), `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `auto`
+    - `to_lang`: 目标语言，支持值: `fr`(法语), `jp`(日语), `zh`(中文)，默认为 `zh`，不能为 `auto`
 
 - **响应**:
 
@@ -1234,11 +1235,12 @@ curl -X GET "http://127.0.0.1:8000/api/test/pron/start?count=5&lang=fr-FR" \
 
 ### 15. 部署说明
 
-1. 安装依赖：`uv pip install -r requirements.txt`（或使用 `pip install -r requirements.txt`）
-2. 配置环境：在项目根目录准备 `.env`，写入数据库、Redis、邮件、翻译等密钥（字段参考 `settings.Settings`）
-3. 确保 MySQL 与 Redis 服务已启动并与 `.env` 中的连接信息匹配
-4. 初始化数据库（首次部署）：`aerich upgrade`
-5. 启动服务：`uvicorn main:app --host 0.0.0.0 --port 8000`（开发环境可加 `--reload`）
+1. 安装依赖: `pip install -r requirements.txt`
+2. 配置数据库连接 (settings.py)
+3. 配置百度翻译API密钥 (BAIDU_APPID, BAIDU_APPKEY)
+4. 启动Redis服务
+5. 运行数据库迁移
+6. 启动服务: `python main.py`
 
 ---
 
