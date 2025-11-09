@@ -20,10 +20,10 @@ async def new_comment(
     type = upload.report_part
     mail_text = upload.text
     sender = "no-reply@lexiverse.com.cn"
-    receivers = ["GodricTan@gmail.com"]
+    receivers = ["GodricTan@gmail.com", "3480039769@qq.com"]
 
-    if type == "dict_fr":
-        receivers.append("3480039769@qq.com") # 3480039769@qq.com
+    # if type == "dict_fr":
+    #     receivers.append("3480039769@qq.com") # 3480039769@qq.com
 
     content = f"""<!DOCTYPE html>
     <html lang="zh-CN">
