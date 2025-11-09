@@ -23,7 +23,7 @@ async def new_comment(
     receivers = ["GodricTan@gmail.com"]
 
     if type == "dict_fr":
-        receivers.append("aurora@lexiverse.com.cn")
+        receivers.append("3480039769@qq.com") # 3480039769@qq.com
 
     content = f"""<!DOCTYPE html>
     <html lang="zh-CN">
