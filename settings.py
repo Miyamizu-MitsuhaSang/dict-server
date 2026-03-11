@@ -18,6 +18,7 @@ TORTOISE_ORM = {
                 'app.models.fr',
                 'app.models.jp',
                 'app.models.comments',
+                'app.models.articles',
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',
@@ -39,6 +40,7 @@ ONLINE_SETTINGS = {
                 'app.models.fr',
                 'app.models.jp',
                 'app.models.comments',
+                'app.models.articles',
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',
@@ -52,6 +54,10 @@ ONLINE_SETTINGS = {
 
 class Settings(BaseSettings):
     USE_OAUTH: bool = False
+
+    WECHAT_SECRET: str
+    WECHAT_APPID: str
+
     SECRET_KEY: str
     BAIDU_APPID: str
     BAIDU_APPKEY: str

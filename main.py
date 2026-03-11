@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
 
 import app.utils.audio_init
 from app.api.admin.router import admin_router
 from app.api.ai_assist.routes import ai_router
 from app.api.article_director.routes import article_router
+from app.api.culture_share.routes import culture_share_router
 from app.api.make_comments.routes import comment_router
 from app.api.pronounciation_test.routes import pron_test_router
 from app.api.redis_test import redis_test_router
@@ -19,12 +21,13 @@ from app.api.util_api.routes import ulit_router
 from app.api.word_comment.routes import word_comment_router
 from app.core.redis import init_redis, close_redis
 from app.utils.phone_encrypt import PhoneEncrypt
-from settings import ONLINE_SETTINGS
+from settings import ONLINE_SETTINGS, ROOT_DIR
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- startup ----
+    # 存放应用级别的共享对象
     app.state.redis = await init_redis()
     # phone_encrypt
     app.state.phone_encrypto = PhoneEncrypt.from_env()  # 接口中通过 Request 访问
@@ -35,6 +38,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+media_root = ROOT_DIR / "media"
+media_root.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(media_root)), name="media")
 
 # 添加CORS中间件
 app.add_middleware(
@@ -65,6 +71,8 @@ app.include_router(comment_router, tags=["Comment API"])
 app.include_router(word_comment_router, tags=["Word Comment API"], prefix="/comment/word")
 
 app.include_router(pron_test_router, tags=["Pron Test API"], prefix="/test/pron")
+
+app.include_router(culture_share_router, tags=["Culture Share API"], prefix="/culture_share")
 
 app.include_router(article_router, tags=["Article API"])
 

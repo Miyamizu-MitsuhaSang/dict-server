@@ -23,14 +23,15 @@ from tortoise.models import Model
 
 class User(Model):
     id = fields.IntField(pk=True)
-    name = fields.CharField(max_length=20, unique=True, description="用户名")
+    name = fields.CharField(max_length=20, description="用户名")
     pwd_hashed = fields.CharField(max_length=60, description="密码")
     portrait = fields.CharField(max_length=120, default='#', description="用户头像")
-    email = fields.CharField(max_length=120, description="e-mail")
+    email = fields.CharField(max_length=120, description="e-mail", unique=True)
     encrypted_phone = fields.CharField(max_length=128, description="用户手机号", null=True)
     language = fields.ForeignKeyField("models.Language", related_name="users", on_delete=fields.CASCADE)
     is_admin = fields.BooleanField(default=False, description="管理员权限")
     token_usage = fields.IntField(default=0, description="AI答疑使用量")
+    created_at = fields.DatetimeField(auto_now_add=True, description="注册时间")
 
     class Meta:
         table = "users"
@@ -49,6 +50,7 @@ class Language(Model):
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=30, unique=True)  # e.g. "Japanese"
     code = fields.CharField(max_length=10, unique=True)  # e.g. "ja", "fr", "zh"
+
 
 class UserTestRecord(Model):
     id = fields.IntField(pk=True)

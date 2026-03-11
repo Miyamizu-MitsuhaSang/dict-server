@@ -4,6 +4,7 @@ from typing import Tuple, Dict
 import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException, Depends, Request
 from jose import jwt
+from tortoise.exceptions import IntegrityError
 
 from app.api.user.user_schemas import UserIn, UpdateUserRequest, UserLoginRequest, UserResetPhoneRequest, \
     VerifyPhoneCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest
@@ -12,8 +13,11 @@ from app.models.base import ReservedWords, User, Language
 from app.utils.security import get_current_user
 from settings import settings
 from . import service
+from .auth_wechat.routes import auth_wechat_router
 
 users_router = APIRouter()
+
+users_router.include_router(auth_wechat_router, prefix="/auth/wechat", tags=["wechat login APIs"])
 
 
 @users_router.post("/register")
@@ -37,13 +41,16 @@ async def register(req: Request, user_in: UserIn):
         req.app.state.phone_encrypto.encrypt(user_in.phone)) \
         if user_in.phone else None
 
-    new_user = await User.create(
-        name=user_in.username,
-        email=user_in.email,
-        pwd_hashed=hashed_pwd,
-        language=lang_pref,
-        encrypted_phone=encrypted_phone,
-    )
+    try:
+        new_user = await User.create(
+            name=user_in.username,
+            email=user_in.email,
+            pwd_hashed=hashed_pwd,
+            language=lang_pref,
+            encrypted_phone=encrypted_phone,
+        )
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="邮箱已被注册")
 
     payload = {
         "user_id": new_user.id,
@@ -82,7 +89,8 @@ async def register_email_verify(req: Request, user_email: UserResetEmailRequest)
 
 
 @users_router.put("/update", deprecated=False)
-async def user_modification(updated_user: UpdateUserRequest, current_user: Tuple[User, Dict] = Depends(get_current_user)):
+async def user_modification(updated_user: UpdateUserRequest,
+                            current_user: Tuple[User, Dict] = Depends(get_current_user)):
     """
 
     :param updated_user: Pydantic 模型验证修改内容（根据JSON内容修改对应字段）
@@ -136,9 +144,11 @@ async def user_login(user_in: UserLoginRequest):
 
 
 @users_router.post("/logout")
-async def user_logout(request: Request,
-                      redis_client: redis.Redis = Depends(get_redis),
-                      user_data: Tuple[User, Dict] = Depends(get_current_user)):
+async def user_logout(
+        request: Request,
+        redis_client: redis.Redis = Depends(get_redis),
+        user_data: Tuple[User, Dict] = Depends(get_current_user)
+):
     user, payload = user_data
     token = request.headers.get("Authorization")
     if not token or not token.startswith("Bearer"):

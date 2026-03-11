@@ -1,25 +1,27 @@
 import random
 import re
+from datetime import datetime, timezone, timedelta
 from typing import Literal
 
 import bcrypt
 from fastapi import HTTPException
-from jose import ExpiredSignatureError, JWTError
+from jose import ExpiredSignatureError, JWTError, jwt
 from redis.asyncio import Redis
 
 from app.core.email_utils import send_email
 from app.core.reset_utils import create_reset_token, save_reset_jti, verify_and_consume_reset_token, ResetTokenError
 from app.models.base import ReservedWords, User
+from settings import settings
 
 
 # 登陆校验
-async def validate_username(username: str):
+async def validate_username(username: str) -> None:
     # 长度限制
     if not (3 <= len(username) <= 20):
-        raise ValueError('用户名长度必须在3到20个字符之间')
+        raise HTTPException(status_code=400, detail='用户名长度必须在3到20个字符之间')
     # 只能包含字母、数字和下划线
     if not re.fullmatch(r'[a-zA-Z_][a-zA-Z0-9_]*', username):
-        raise ValueError('用户名只能包含字母、数字和下划线，且不能以数字开头')
+        raise HTTPException(status_code=400, detail='用户名只能包含字母、数字和下划线，且不能以数字开头')
     # 保留词
     reserved_words = await ReservedWords.filter(category="username").values_list("reserved", flat=True)
     if username.lower() in {w.lower() for w in reserved_words}:
@@ -180,10 +182,11 @@ async def send_email_code(redis: Redis, email: str, code: str, ops_type: Literal
 
 
 async def verify_email_code(redis: Redis, email: str, input_code: str) -> bool:
-    stored = await redis.getdel(f"email:{email}")
-    if stored is None or stored != input_code:
-        return False
-    return True
+    stored = await redis.get(f"email:{email}")
+    if stored == input_code:
+        await redis.delete(f"email:{email}")
+        return True
+    return False
 
 
 async def __get_reset_token(redis: Redis, email: str):
@@ -217,3 +220,32 @@ async def is_reset_password(redis: Redis, token: str):
         print(e)
     except JWTError as e:
         print(e)
+
+def token_issuer(
+        user_id: str,
+        is_admin: bool
+) -> str:
+    """
+    登录 token 生成器
+
+    Parameters
+    ----------
+    user_id: str
+        用户ID
+    is_admin: bool
+        用户是否为管理权限用户
+
+    Returns
+    -------
+    str
+        token
+    """
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
+        "is_admin": is_admin,
+    }
+
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+    return token

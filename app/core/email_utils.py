@@ -41,7 +41,7 @@ def send_email(to_email: str, subject: str, content: str):
         raise
 
 def main(receiver: str, code: int = 123456):
-    content_model = content = f"""
+    content_model = f"""
             <html>
               <body style="font-family: Arial, sans-serif; line-height:1.6;">
                 <h2 style="color:#4CAF50;">Lexiverse 验证码</h2>
