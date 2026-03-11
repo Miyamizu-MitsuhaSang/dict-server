@@ -115,3 +115,20 @@ class BannerSwitchResponse(BaseModel):
     article_id: str
     banner_id: int | None = None
     enabled: bool
+
+
+class ArticlePublishedStatusResponse(BaseModel):
+    article_id: str
+    status: ArticleStatus
+    is_published: bool
+    publish_at: datetime | None = None
+
+
+class ArticleBannerStatusResponse(BaseModel):
+    article_id: str
+    has_banner: bool
+    enabled: bool
+    banner_id: int | None = None
+    sort_order: int | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None

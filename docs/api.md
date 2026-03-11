@@ -408,6 +408,26 @@
 
 ---
 
+### Get Published Status
+**Method**: `GET`  
+**Path**: `/admin/article/{article_id}/published`
+
+#### 响应
+- **200**：`{"article_id": "<id>", "status": "draft|published", "is_published": <bool>, "publish_at": "<datetime|null>"}`  
+- **404**：文章不存在
+
+---
+
+### Get Banner Status
+**Method**: `GET`  
+**Path**: `/admin/article/{article_id}/banner`
+
+#### 响应
+- **200**：`{"article_id": "<id>", "has_banner": <bool>, "enabled": <bool>, "banner_id": <int|null>, "sort_order": <int|null>, "start_at": "<datetime|null>", "end_at": "<datetime|null>"}`  
+- **404**：文章不存在
+
+---
+
 ### Publish Article
 **Method**: `POST`  
 **Path**: `/admin/article/{article_id}/publish`

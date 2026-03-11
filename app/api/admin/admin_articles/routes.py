@@ -7,7 +7,8 @@ from tortoise.exceptions import DoesNotExist
 from app.api.admin.admin_articles import service
 from app.api.admin.admin_articles.admin_articles_schemas import ArticleActionResponse, ArticleCreatePayload, \
     ArticleUpdatePayload, ArticleDetailResponse, ArticleListResponse, ArticleItemResponse, ArticleCoverUploadResponse, \
-    TagCreatePayload, TagItemResponse, TagListResponse, BannerSwitchPayload, BannerSwitchResponse
+    TagCreatePayload, TagItemResponse, TagListResponse, BannerSwitchPayload, BannerSwitchResponse, \
+    ArticlePublishedStatusResponse, ArticleBannerStatusResponse
 from app.models.base import User
 from app.utils.security import is_admin_user
 
@@ -100,6 +101,47 @@ async def get_article_detail_api(article_id: str):
         raise HTTPException(status_code=404, detail="文章不存在")
 
     return ArticleDetailResponse.model_validate(article)
+
+
+@admin_banner_router.get(
+    "/{article_id}/published",
+    response_model=ArticlePublishedStatusResponse,
+    summary="查询文章发布状态",
+)
+async def get_article_published_status_api(article_id: str):
+    try:
+        status, is_published, publish_at = await service.get_article_publish_status(article_id)
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="文章不存在")
+
+    return ArticlePublishedStatusResponse(
+        article_id=article_id,
+        status=status,
+        is_published=is_published,
+        publish_at=publish_at,
+    )
+
+
+@admin_banner_router.get(
+    "/{article_id}/banner",
+    response_model=ArticleBannerStatusResponse,
+    summary="查询文章轮播状态",
+)
+async def get_article_banner_status_api(article_id: str):
+    try:
+        has_banner, enabled, banner_id, sort_order, start_at, end_at = await service.get_article_banner_status(article_id)
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="文章不存在")
+
+    return ArticleBannerStatusResponse(
+        article_id=article_id,
+        has_banner=has_banner,
+        enabled=enabled,
+        banner_id=banner_id,
+        sort_order=sort_order,
+        start_at=start_at,
+        end_at=end_at,
+    )
 
 @admin_banner_router.get("", response_model=ArticleListResponse, summary="文章列表")
 async def list_articles_api(

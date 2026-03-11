@@ -133,6 +133,19 @@ async def unpublish_article(article_id: str) -> Article:
     return article
 
 
+async def get_article_publish_status(article_id: str) -> tuple[str, bool, datetime | None]:
+    article = await Article.get(article_id=article_id)
+    return article.status, article.status == "published", article.publish_at
+
+
+async def get_article_banner_status(article_id: str) -> tuple[bool, bool, int | None, int | None, datetime | None, datetime | None]:
+    article = await Article.get(article_id=article_id)
+    banner = await Banner.get_or_none(article=article)
+    if not banner:
+        return False, False, None, None, None, None
+    return True, banner.is_active, banner.id, banner.sort_order, banner.start_at, banner.end_at
+
+
 async def get_article_detail(article_id: int) -> Article:
     return await Article.get(article_id=article_id)
 
