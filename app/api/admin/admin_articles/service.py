@@ -1,8 +1,8 @@
+import re
 import uuid
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-import re
 
 from tortoise.queryset import QuerySet
 
@@ -394,6 +394,32 @@ async def upload_article_temp_images(files: list[tuple[str, bytes]]) -> list[str
         absolute_path.write_bytes(content)
         urls.append(f"/media/{relative_path}")
     return urls
+
+
+async def delete_article_temp_images(image_urls: list[str]) -> tuple[list[str], list[str]]:
+    temp_root = (ROOT_DIR / "media" / "article" / "temp").resolve()
+    deleted_urls: list[str] = []
+    skipped_urls: list[str] = []
+
+    for raw_url in image_urls:
+        url = raw_url.strip()
+        if not url.startswith(TEMP_IMAGE_URL_PREFIX):
+            skipped_urls.append(raw_url)
+            continue
+
+        target_file = (ROOT_DIR / url.lstrip("/")).resolve()
+        if temp_root not in target_file.parents:
+            skipped_urls.append(raw_url)
+            continue
+
+        if not target_file.exists() or not target_file.is_file():
+            skipped_urls.append(raw_url)
+            continue
+
+        target_file.unlink()
+        deleted_urls.append(url)
+
+    return deleted_urls, skipped_urls
 
 
 async def search_tags(keyword: str | None = None, limit: int = 20) -> tuple[list[ArticleTag], int]:

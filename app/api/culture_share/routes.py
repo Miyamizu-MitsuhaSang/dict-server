@@ -72,14 +72,18 @@ async def list_articles(
 @culture_share_router.get(
     "/article/{article_id}",
     response_model=ArticleDetailResponse,
-    description="前端文章详情，仅返回已发布文章",
+    description="前端文章详情：普通用户仅可查看已发布文章，管理员可预览未发布文章",
 )
 async def get_article_detail(
         article_id: str,
-        _user: Tuple[User, Dict] = Depends(get_current_user),
+        user_payload: Tuple[User, Dict] = Depends(get_current_user),
 ):
+    user, _ = user_payload
     try:
-        article = await service.get_published_article_detail(article_id)
+        if user.is_admin:
+            article = await service.get_article_detail_for_admin(article_id)
+        else:
+            article = await service.get_published_article_detail(article_id)
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="文章不存在或未发布")
 

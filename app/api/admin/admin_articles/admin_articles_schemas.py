@@ -102,6 +102,16 @@ class ArticleTempImageUploadResponse(BaseModel):
     images: list[ArticleTempImageItemResponse]
 
 
+class ArticleTempImageDeletePayload(BaseModel):
+    image_urls: list[str] = Field(..., min_length=1)
+
+
+class ArticleTempImageDeleteResponse(BaseModel):
+    message: str
+    deleted_urls: list[str]
+    skipped_urls: list[str]
+
+
 class TagCreatePayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
 

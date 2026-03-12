@@ -8,7 +8,8 @@ from app.api.admin.admin_articles import service
 from app.api.admin.admin_articles.admin_articles_schemas import ArticleActionResponse, ArticleCreatePayload, \
     ArticleUpdatePayload, ArticleDetailResponse, ArticleListResponse, ArticleItemResponse, ArticleCoverUploadResponse, \
     ArticleContentImageUploadResponse, ArticleContentImageItemResponse, ArticleTempImageUploadResponse, \
-    ArticleTempImageItemResponse, TagCreatePayload, TagItemResponse, \
+    ArticleTempImageItemResponse, ArticleTempImageDeletePayload, ArticleTempImageDeleteResponse, TagCreatePayload, \
+    TagItemResponse, \
     TagListResponse, BannerSwitchPayload, BannerSwitchResponse, \
     ArticlePublishedStatusResponse, ArticleBannerStatusResponse
 from app.models.base import User
@@ -231,6 +232,20 @@ async def upload_article_temp_images_api(
     return ArticleTempImageUploadResponse(
         message="临时图片上传成功",
         images=[ArticleTempImageItemResponse(image_url=url) for url in urls],
+    )
+
+
+@admin_banner_router.delete(
+    "/upload-temp-images",
+    response_model=ArticleTempImageDeleteResponse,
+    summary="删除临时上传文章图片（多图）",
+)
+async def delete_article_temp_images_api(payload: ArticleTempImageDeletePayload):
+    deleted_urls, skipped_urls = await service.delete_article_temp_images(payload.image_urls)
+    return ArticleTempImageDeleteResponse(
+        message="临时图片删除完成",
+        deleted_urls=deleted_urls,
+        skipped_urls=skipped_urls,
     )
 
 

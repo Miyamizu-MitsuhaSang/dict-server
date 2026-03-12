@@ -74,6 +74,10 @@ async def get_published_article_detail(article_id: str) -> Article:
     ).get()
 
 
+async def get_article_detail_for_admin(article_id: str) -> Article:
+    return await Article.get(article_id=article_id)
+
+
 async def get_top_used_tags(limit: int = 10) -> tuple[list[ArticleTag], int]:
     qs = ArticleTag.filter(usage_count__gt=0).order_by("-usage_count", "name")
     total = await qs.count()

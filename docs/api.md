@@ -321,6 +321,10 @@
 - **200**：`{article_id, title, summary, source, cover_url, content_html, content_text, category, tags, publish_at, created_at, updated_at}`  
 - **404**：文章不存在或未发布
 
+#### 访问规则
+- 普通用户：仅可查看已发布且在发布时间内的文章。
+- 管理员用户：可预览任意状态文章（包括草稿/未到发布时间）。
+
 ------
 
 ## Admin Article API
@@ -547,6 +551,32 @@
 #### 存储规则
 - 临时目录：`<项目根目录>/media/article/temp/YYYYMM/`
 - 文件名：`temp_{yyyyMMddHHmmss}_{index}_{8位随机串}.{ext}`
+
+---
+
+### Delete Temp Content Images
+**Method**: `DELETE`  
+**Path**: `/admin/article/upload-temp-images`
+
+#### 请求体
+`application/json`
+
+```json
+{
+  "image_urls": [
+    "/media/article/temp/202603/temp_20260312120000_0_ab12cd34.png",
+    "/media/article/temp/202603/temp_20260312120000_1_ef56gh78.jpg"
+  ]
+}
+```
+
+#### 响应
+`{"message": "临时图片删除完成", "deleted_urls": [...], "skipped_urls": [...]}`
+
+#### 说明
+- 仅允许删除临时目录 `/media/article/temp/` 下的文件。
+- 不在临时目录、文件不存在或路径非法的 URL 会进入 `skipped_urls`。
+- 该接口只删除临时文件，不影响已经转正到 `/media/article/content/...` 的图片。
 
 ---
 
