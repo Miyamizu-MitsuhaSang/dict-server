@@ -21,7 +21,7 @@ from app.api.util_api.routes import ulit_router
 from app.api.word_comment.routes import word_comment_router
 from app.core.redis import init_redis, close_redis
 from app.utils.phone_encrypt import PhoneEncrypt
-from settings import ONLINE_SETTINGS, ROOT_DIR
+from settings import ONLINE_SETTINGS, ROOT_DIR, TORTOISE_ORM
 
 
 @asynccontextmanager
@@ -53,7 +53,7 @@ app.add_middleware(
 
 register_tortoise(
     app=app,
-    config=ONLINE_SETTINGS,
+    config=TORTOISE_ORM,
 )
 
 app.include_router(users_router, tags=["User API"], prefix="/users")

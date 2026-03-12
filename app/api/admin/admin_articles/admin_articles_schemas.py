@@ -81,6 +81,27 @@ class ArticleCoverUploadResponse(BaseModel):
     pic_id: str
 
 
+class ArticleContentImageItemResponse(BaseModel):
+    pic_id: str
+    image_url: str
+    sequence: int
+
+
+class ArticleContentImageUploadResponse(BaseModel):
+    message: str
+    article_id: str
+    images: list[ArticleContentImageItemResponse]
+
+
+class ArticleTempImageItemResponse(BaseModel):
+    image_url: str
+
+
+class ArticleTempImageUploadResponse(BaseModel):
+    message: str
+    images: list[ArticleTempImageItemResponse]
+
+
 class TagCreatePayload(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
 

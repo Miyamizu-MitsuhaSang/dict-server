@@ -2,6 +2,7 @@ import uuid
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+import re
 
 from tortoise.queryset import QuerySet
 
@@ -12,6 +13,7 @@ from app.utils.article_content import sanitize_html, strip_html_tags
 from settings import ROOT_DIR
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+TEMP_IMAGE_URL_PREFIX = "/media/article/temp/"
 
 
 def normalize_tags(tags: list[str]) -> list[str]:
@@ -54,12 +56,95 @@ async def clear_banner_cache():
         await redis_delete(f"home:banners:{limit}")
 
 
+def _extract_temp_urls(text: str | None) -> list[str]:
+    if not text:
+        return []
+    pattern = re.compile(r"/media/article/temp/[A-Za-z0-9_./-]+")
+    return list(dict.fromkeys(pattern.findall(text)))
+
+
+def _move_temp_file_to_content(article_id: str, temp_url: str) -> str:
+    temp_file = ROOT_DIR / temp_url.lstrip("/")
+    if not temp_file.exists():
+        return temp_url
+
+    ext = temp_file.suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return temp_url
+
+    folder_name = datetime.now().strftime("%Y%m")
+    relative_dir = Path("article/content") / folder_name
+    absolute_dir = ROOT_DIR / "media" / relative_dir
+    absolute_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_article_id = article_id.replace("-", "")
+    unique = uuid.uuid4().hex[:8]
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    save_name = f"content_{safe_article_id}_{timestamp}_{unique}{ext}"
+
+    relative_path = (relative_dir / save_name).as_posix()
+    absolute_path = absolute_dir / save_name
+    temp_file.replace(absolute_path)
+    return f"/media/{relative_path}"
+
+
+async def _sync_promoted_pictures(article: Article, promoted_urls: list[str], cover_url: str | None) -> None:
+    if not promoted_urls and not cover_url:
+        return
+
+    existing_paths = set(await ArticlePicture.filter(article=article).values_list("pic_path", flat=True))
+
+    if cover_url and cover_url.startswith("/media/"):
+        cover_path = cover_url.replace("/media/", "", 1)
+        old_cover = await ArticlePicture.get_or_none(article=article, is_cover=True)
+        if old_cover:
+            old_cover.pic_path = cover_path
+            old_cover.sequence = 0
+            await old_cover.save(update_fields=["pic_path", "sequence"])
+        elif cover_path not in existing_paths:
+            await ArticlePicture.create(article=article, pic_path=cover_path, is_cover=True, sequence=0)
+            existing_paths.add(cover_path)
+
+    last_pic = await ArticlePicture.filter(article=article, is_cover=False).order_by("-sequence").first()
+    sequence = (last_pic.sequence if last_pic else 0) + 1
+    for url in promoted_urls:
+        if not url.startswith("/media/"):
+            continue
+        pic_path = url.replace("/media/", "", 1)
+        if pic_path in existing_paths:
+            continue
+        await ArticlePicture.create(article=article, pic_path=pic_path, is_cover=False, sequence=sequence)
+        existing_paths.add(pic_path)
+        sequence += 1
+
+
+async def promote_temp_images_for_article(
+        article: Article,
+        cover_url: str | None,
+        content_html: str,
+) -> tuple[str | None, str]:
+    temp_urls = _extract_temp_urls(content_html)
+    if cover_url and cover_url.startswith(TEMP_IMAGE_URL_PREFIX):
+        temp_urls = list(dict.fromkeys([cover_url] + temp_urls))
+
+    if not temp_urls:
+        return cover_url, content_html
+
+    mapping: dict[str, str] = {}
+    for temp_url in temp_urls:
+        mapping[temp_url] = _move_temp_file_to_content(article.article_id, temp_url)
+
+    resolved_cover = mapping.get(cover_url, cover_url) if cover_url else None
+    resolved_html = content_html
+    for old_url, new_url in mapping.items():
+        resolved_html = resolved_html.replace(old_url, new_url)
+
+    promoted_urls = [new for old, new in mapping.items() if old != new]
+    await _sync_promoted_pictures(article, promoted_urls, resolved_cover)
+    return resolved_cover, resolved_html
+
+
 async def create_article(payload: ArticleCreatePayload) -> Article:
-    cleaned_html = sanitize_html(payload.content_html)
-
-    # 如果前端没传 content_text，就后端自动提取
-    final_text = payload.content_text or strip_html_tags(cleaned_html)
-
     # 如果状态是 published，但 publish_at 没传，就自动补当前时间
     final_publish_at = payload.publish_at
     if payload.status == "published" and final_publish_at is None:
@@ -73,22 +158,33 @@ async def create_article(payload: ArticleCreatePayload) -> Article:
         summary=payload.summary.strip() if payload.summary else None,
         source=payload.source.strip() if payload.source else None,
         cover_url=payload.cover_url,
-        content_html=cleaned_html,
-        content_text=final_text,
+        content_html=payload.content_html,
+        content_text=payload.content_text,
         tags=final_tags,
         category=payload.category,
         status=payload.status,
         publish_at=final_publish_at,
     )
+
+    resolved_cover, resolved_html = await promote_temp_images_for_article(
+        article=article,
+        cover_url=payload.cover_url,
+        content_html=payload.content_html,
+    )
+    cleaned_html = sanitize_html(resolved_html)
+    final_text = payload.content_text or strip_html_tags(cleaned_html)
+
+    article.cover_url = resolved_cover
+    article.content_html = cleaned_html
+    article.content_text = final_text
+    await article.save(update_fields=["cover_url", "content_html", "content_text"])
+
     await refresh_tag_usage_counts()
     return article
 
 
 async def update_article(article_id: str, payload: ArticleUpdatePayload) -> Article:
     article = await Article.get(article_id=article_id)
-
-    cleaned_html = sanitize_html(payload.content_html)
-    final_text = payload.content_text or strip_html_tags(cleaned_html)
 
     final_publish_at = payload.publish_at
 
@@ -99,10 +195,18 @@ async def update_article(article_id: str, payload: ArticleUpdatePayload) -> Arti
     final_tags = normalize_tags(payload.tags)
     await ensure_tags_exist(final_tags)
 
+    resolved_cover, resolved_html = await promote_temp_images_for_article(
+        article=article,
+        cover_url=payload.cover_url,
+        content_html=payload.content_html,
+    )
+    cleaned_html = sanitize_html(resolved_html)
+    final_text = payload.content_text or strip_html_tags(cleaned_html)
+
     article.title = payload.title.strip()
     article.summary = payload.summary.strip() if payload.summary else None
     article.source = payload.source.strip() if payload.source else None
-    article.cover_url = payload.cover_url
+    article.cover_url = resolved_cover
     article.content_html = cleaned_html
     article.content_text = final_text
     article.tags = final_tags
@@ -223,6 +327,73 @@ async def upload_article_cover(article_id: str, filename: str, content: bytes) -
     await article.save(update_fields=["cover_url"])
 
     return cover_url, pic_id
+
+
+async def upload_article_content_images(
+        article_id: str,
+        files: list[tuple[str, bytes]],
+) -> list[dict]:
+    article = await Article.get(article_id=article_id)
+
+    folder_name = datetime.now().strftime("%Y%m")
+    relative_dir = Path("article/content") / folder_name
+    absolute_dir = ROOT_DIR / "media" / relative_dir
+    absolute_dir.mkdir(parents=True, exist_ok=True)
+
+    last_pic = await ArticlePicture.filter(article=article, is_cover=False).order_by("-sequence").first()
+    start_sequence = (last_pic.sequence if last_pic else 0) + 1
+
+    safe_article_id = article.article_id.replace("-", "")
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    results: list[dict] = []
+    for idx, (filename, content) in enumerate(files):
+        ext = Path(filename).suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError(f"文件 {filename} 格式不支持，仅支持 jpg/jpeg/png/webp/gif")
+
+        unique = uuid.uuid4().hex[:8]
+        save_name = f"content_{safe_article_id}_{timestamp}_{idx}_{unique}{ext}"
+        relative_path = (relative_dir / save_name).as_posix()
+        absolute_path = absolute_dir / save_name
+        absolute_path.write_bytes(content)
+
+        sequence = start_sequence + idx
+        pic = await ArticlePicture.create(
+            article=article,
+            pic_path=relative_path,
+            is_cover=False,
+            sequence=sequence,
+        )
+
+        results.append({
+            "pic_id": pic.pic_id,
+            "image_url": f"/media/{relative_path}",
+            "sequence": sequence,
+        })
+
+    return results
+
+
+async def upload_article_temp_images(files: list[tuple[str, bytes]]) -> list[str]:
+    folder_name = datetime.now().strftime("%Y%m")
+    relative_dir = Path("article/temp") / folder_name
+    absolute_dir = ROOT_DIR / "media" / relative_dir
+    absolute_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    urls: list[str] = []
+    for idx, (filename, content) in enumerate(files):
+        ext = Path(filename).suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError(f"文件 {filename} 格式不支持，仅支持 jpg/jpeg/png/webp/gif")
+        unique = uuid.uuid4().hex[:8]
+        save_name = f"temp_{timestamp}_{idx}_{unique}{ext}"
+        relative_path = (relative_dir / save_name).as_posix()
+        absolute_path = absolute_dir / save_name
+        absolute_path.write_bytes(content)
+        urls.append(f"/media/{relative_path}")
+    return urls
 
 
 async def search_tags(keyword: str | None = None, limit: int = 20) -> tuple[list[ArticleTag], int]:

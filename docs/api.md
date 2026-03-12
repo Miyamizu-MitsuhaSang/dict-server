@@ -1,5 +1,6 @@
 # FastAPI  
-版本：0.1.0
+版本：2.0  
+最后更新：2026-03-12
 
 **认证方式**  
 除特别说明外，接口均需要在 Header 中携带 `Authorization: Bearer <token>`。
@@ -346,6 +347,12 @@
 #### 响应
 `{"message": "文章创建成功", "article_id": "<id>"}`
 
+#### 与临时图片上传联动
+- 若 `cover_url` 或 `content_html` 中使用了 `/media/article/temp/...` 临时地址，保存时后端会自动：
+- 将对应文件移动到正式目录 `/media/article/content/YYYYMM/`
+- 把正文中的临时 URL 替换为正式 URL
+- 同步写入 `article_pics`（`is_cover=false`），封面地址也会更新为正式地址
+
 ---
 
 ### Update Article (Edit & Save)
@@ -373,6 +380,7 @@
   如果文章已有发布时间则沿用，否则自动补当前时间。
 - `tags` 会自动 `strip + 去重`，并写入 `article_tags` 表。
 - 正文会先进行 HTML 清洗，再存储。
+- 若 `cover_url` 或 `content_html` 中包含 `/media/article/temp/...`，会在保存时自动转正为 `/media/article/content/...` 并落库。
 
 #### 响应
 - **200**：`{"message": "文章更新成功", "article_id": "<id>"}`
@@ -516,6 +524,55 @@
 
 ---
 
+### Upload Temp Content Images (Recommended Before Create)
+**Method**: `POST`  
+**Path**: `/admin/article/upload-temp-images`
+
+#### 请求体
+`multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| files | UploadFile[] | 是 | 正文图片文件数组（同名字段可传多次），支持 `jpg/jpeg/png/webp/gif` |
+
+#### 响应
+`{"message": "临时图片上传成功", "images": [{"image_url": "/media/article/temp/YYYYMM/temp_<timestamp>_<index>_<rand>.<ext>"}, ...]}`
+
+#### 适用流程
+1. 前端先调本接口拿到临时 URL。  
+2. 将 URL 插入编辑器正文（必要时也可先作为 `cover_url`）。  
+3. 调 `Create Article` 或 `Update Article` 保存。  
+4. 后端自动将临时图转正并替换正文 URL，无需提前知道 `article_id`。
+
+#### 存储规则
+- 临时目录：`<项目根目录>/media/article/temp/YYYYMM/`
+- 文件名：`temp_{yyyyMMddHHmmss}_{index}_{8位随机串}.{ext}`
+
+---
+
+### Upload Content Images
+**Method**: `POST`  
+**Path**: `/admin/article/{article_id}/content-images/upload`
+
+#### 请求体
+`multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| files | UploadFile[] | 是 | 正文图片文件数组（同名字段可传多次），支持 `jpg/jpeg/png/webp/gif` |
+
+#### 响应
+`{"message": "正文图片上传成功", "article_id": "<id>", "images": [{"pic_id": "...", "image_url": "/media/article/content/YYYYMM/content_<...>.png", "sequence": 1}, ...]}`
+
+前端可直接使用返回的 `image_url` 插入正文 HTML。
+
+#### 存储规则
+- 目录：`<项目根目录>/media/article/content/YYYYMM/`
+- 文件名：`content_{article_id去掉-}_{yyyyMMddHHmmss}_{index}_{8位随机串}.{ext}`
+- 同时写入 `article_pics`，并标记 `is_cover=false`
+
+---
+
 ### Search Tags
 **Method**: `GET`  
 **Path**: `/admin/article/tag/search`
@@ -577,7 +634,14 @@
 #### 响应
 `{"msg": "已清除 <word> 的聊天记录"}`
 
-> `/ai_assist/univer` 暂未实现，调用会返回空响应。
+---
+
+### Universal Assist (Reserved)
+**Method**: `POST`  
+**Path**: `/ai_assist/univer`
+
+#### 状态
+预留接口，当前后端尚未实现业务逻辑（调用返回空响应）。
 
 ------
 

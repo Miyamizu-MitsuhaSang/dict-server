@@ -7,7 +7,9 @@ from tortoise.exceptions import DoesNotExist
 from app.api.admin.admin_articles import service
 from app.api.admin.admin_articles.admin_articles_schemas import ArticleActionResponse, ArticleCreatePayload, \
     ArticleUpdatePayload, ArticleDetailResponse, ArticleListResponse, ArticleItemResponse, ArticleCoverUploadResponse, \
-    TagCreatePayload, TagItemResponse, TagListResponse, BannerSwitchPayload, BannerSwitchResponse, \
+    ArticleContentImageUploadResponse, ArticleContentImageItemResponse, ArticleTempImageUploadResponse, \
+    ArticleTempImageItemResponse, TagCreatePayload, TagItemResponse, \
+    TagListResponse, BannerSwitchPayload, BannerSwitchResponse, \
     ArticlePublishedStatusResponse, ArticleBannerStatusResponse
 from app.models.base import User
 from app.utils.security import is_admin_user
@@ -196,6 +198,76 @@ async def upload_article_cover_api(
         article_id=article_id,
         cover_url=cover_url,
         pic_id=pic_id,
+    )
+
+
+@admin_banner_router.post(
+    "/upload-temp-images",
+    response_model=ArticleTempImageUploadResponse,
+    summary="临时上传文章图片（多图，无需 article_id）",
+)
+async def upload_article_temp_images_api(
+        files: list[UploadFile] = File(...),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="请至少上传一张图片")
+
+    prepared_files: list[tuple[str, bytes]] = []
+    for file in files:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="存在缺少文件名的图片")
+        if file.content_type and not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail=f"文件 {file.filename} 不是图片")
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail=f"文件 {file.filename} 内容为空")
+        prepared_files.append((file.filename, content))
+
+    try:
+        urls = await service.upload_article_temp_images(prepared_files)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ArticleTempImageUploadResponse(
+        message="临时图片上传成功",
+        images=[ArticleTempImageItemResponse(image_url=url) for url in urls],
+    )
+
+
+@admin_banner_router.post(
+    "/{article_id}/content-images/upload",
+    response_model=ArticleContentImageUploadResponse,
+    summary="上传正文图片（多图）",
+)
+async def upload_article_content_images_api(
+        article_id: str,
+        files: list[UploadFile] = File(...),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="请至少上传一张图片")
+
+    prepared_files: list[tuple[str, bytes]] = []
+    for file in files:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="存在缺少文件名的图片")
+        if file.content_type and not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail=f"文件 {file.filename} 不是图片")
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail=f"文件 {file.filename} 内容为空")
+        prepared_files.append((file.filename, content))
+
+    try:
+        uploaded = await service.upload_article_content_images(article_id, prepared_files)
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ArticleContentImageUploadResponse(
+        message="正文图片上传成功",
+        article_id=article_id,
+        images=[ArticleContentImageItemResponse(**item) for item in uploaded],
     )
 
 
