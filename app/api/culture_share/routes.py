@@ -15,7 +15,7 @@ from app.api.culture_share.culture_share_schemas import (
     PopularTagResponse,
 )
 from app.models import User
-from app.utils.security import get_current_user
+from app.utils.security import get_optional_current_user
 
 culture_share_router = APIRouter()
 
@@ -52,7 +52,6 @@ async def list_articles(
         page_size: int = Query(default=10, ge=1, le=50),
         category: str | None = Query(default=None),
         keyword: str | None = Query(default=None),
-        _user: Tuple[User, Dict] = Depends(get_current_user),
 ):
     items, total = await service.list_published_articles(
         page=page,
@@ -76,11 +75,10 @@ async def list_articles(
 )
 async def get_article_detail(
         article_id: str,
-        user_payload: Tuple[User, Dict] = Depends(get_current_user),
+        user_payload: Tuple[User, Dict] | None = Depends(get_optional_current_user),
 ):
-    user, _ = user_payload
     try:
-        if user.is_admin:
+        if user_payload and user_payload[0].is_admin:
             article = await service.get_article_detail_for_admin(article_id)
         else:
             article = await service.get_published_article_detail(article_id)
@@ -97,7 +95,6 @@ async def get_article_detail(
 )
 async def get_popular_tags(
         limit: int = Query(default=10, ge=1, le=100),
-        _user: Tuple[User, Dict] = Depends(get_current_user),
 ):
     items, total = await service.get_top_used_tags(limit=limit)
     return PopularTagResponse(

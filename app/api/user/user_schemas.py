@@ -30,6 +30,8 @@ class UserIn(BaseModel):
     @field_validator('phone')
     @classmethod
     def validate_phone(cls, v):
+        if v is None:
+            return v
         if not re.match(pattern=r"^1[3-9]\d{9}$", string=v):
             raise HTTPException(status_code=400, detail="手机号格式错误")
         return v
@@ -82,6 +84,18 @@ class UserLoginRequest(BaseModel):
     password: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
+class MiniProgramLoginRequest(BaseModel):
+    code: str
+
+
 class UserSchema(BaseModel):
     id: int
     name: str
@@ -107,3 +121,25 @@ class VerifyEmailRequest(BaseModel):
 
 class UserResetPasswordRequest(BaseModel):
     password: str
+
+
+class SessionUserOut(BaseModel):
+    id: int
+    username: str
+    is_admin: bool
+    lang_pref: str = "private"
+    portrait: str = default_portrait_url
+    login_type: Optional[str] = None
+
+
+class SessionTokensOut(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
+
+
+class LoginResponseOut(SessionTokensOut):
+    user: SessionUserOut
+    is_new_user: bool = False

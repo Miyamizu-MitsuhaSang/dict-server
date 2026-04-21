@@ -1,68 +1,111 @@
 import secrets
+from urllib.parse import urlencode
 
-import httpx
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 
+from app.api.user.user_schemas import MiniProgramLoginRequest
 from settings import settings
+from . import service
 
 auth_wechat_router = APIRouter()
 
 
-@auth_wechat_router.post("/login")
-async def wechat_login():
+def _build_frontend_redirect(base_url: str, params: dict[str, str]) -> str:
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}{urlencode(params)}"
+
+
+@auth_wechat_router.get("/login")
+async def wechat_login(request: Request):
     """
     1) 生成 state 防 CSRF
-    2) 重定向到微信扫码登录页
+    2) 跳转到微信开放平台扫码登录页
     """
-    WECHAT_APPID = settings.WECHAT_APPID
-    WECHAT_SECRET = settings.WECHAT_SECRET
-
-    if not WECHAT_APPID or not WECHAT_SECRET:
-        raise HTTPException(status_code=500, detail="WECHAT_APPID/WECHAT_SECRET not configured")
+    service.ensure_wechat_settings()
 
     state = secrets.token_urlsafe(16)
+    await service.put_state(request.app.state.redis, state)
 
-    authorize_url = (
-        "https://open.weixin.qq.com/connect/qrconnect"
-        f"?appid={WECHAT_APPID}"
-        f"&redirect_uri={httpx.URL(settings.WECHAT_REDIRECT_URI)}"
-        "&response_type=code"
-        "&scope=snsapi_login"
-        f"&state={state}"
-        "#wechat_redirect"
-    )
-
+    authorize_url = service.build_authorize_url(state)
     return RedirectResponse(authorize_url)
 
-# @auth_wechat_router.get("/callback")
-# async def wechat_callback(code: str, state: str):
-#     """
-#     微信回调：校验 state -> 用 code 换取 access_token/openid -> (可选)拿用户信息 -> 映射站内用户 -> 签发站内token
-#     """
-#     if not pop_state_if_valid(state):
-#         raise HTTPException(status_code=400, detail="Invalid or expired state")
-#
-#     token_data = await wechat_exchange_code_for_token(code)
-#     openid = token_data["openid"]
-#     access_token = token_data["access_token"]
-#     unionid = token_data.get("unionid")
-#
-#     # 可选：拿用户资料（昵称头像等），失败也可以不阻断，看你业务
-#     profile = None
-#     try:
-#         profile = await wechat_get_userinfo(access_token, openid)
-#     except Exception:
-#         profile = None
-#
-#     user_id = await get_or_create_user_by_wechat(openid, unionid, profile)
-#     our_token = issue_our_token(user_id)
-#
-#     # 你可以：1) 返回 JSON 给前端；2) 重定向回前端页面并带 token；3) 写 Cookie
-#     return JSONResponse(
-#         {
-#             "user_id": user_id,
-#             "token": our_token,
-#             "wechat_profile": profile,  # 可选返回
-#         }
-#     )
+
+@auth_wechat_router.get("/callback")
+async def wechat_callback(
+        request: Request,
+        code: str | None = Query(default=None),
+        state: str | None = Query(default=None),
+):
+    """
+    微信扫码回调：
+    校验 state -> 用 code 换 openid/access_token -> 查找或创建站内用户 -> 签发站内 JWT
+    """
+    service.ensure_wechat_settings()
+
+    if not code or not state:
+        detail = "微信回调缺少 code 或 state"
+        if settings.WECHAT_CALLBACK_FAILURE_URL:
+            return RedirectResponse(
+                _build_frontend_redirect(settings.WECHAT_CALLBACK_FAILURE_URL, {"error": detail})
+            )
+        raise HTTPException(status_code=400, detail=detail)
+
+    if not await service.pop_state_if_valid(request.app.state.redis, state):
+        detail = "无效或过期的微信登录 state"
+        if settings.WECHAT_CALLBACK_FAILURE_URL:
+            return RedirectResponse(
+                _build_frontend_redirect(settings.WECHAT_CALLBACK_FAILURE_URL, {"error": detail})
+            )
+        raise HTTPException(status_code=400, detail=detail)
+
+    token_data = await service.wechat_exchange_code_for_token(code)
+    openid = token_data["openid"]
+    access_token = token_data["access_token"]
+    unionid = token_data.get("unionid")
+
+    profile = None
+    try:
+        profile = await service.wechat_get_userinfo(access_token=access_token, openid=openid)
+    except HTTPException:
+        profile = None
+
+    login_result = await service.finalize_wechat_login(
+        redis=request.app.state.redis,
+        provider=service.WECHAT_OPEN_PROVIDER,
+        openid=openid,
+        unionid=unionid,
+        profile=profile,
+        login_type="wechat_open",
+    )
+
+    if settings.WECHAT_CALLBACK_SUCCESS_URL:
+        redirect_url = _build_frontend_redirect(
+            settings.WECHAT_CALLBACK_SUCCESS_URL,
+            {
+                "token": login_result["access_token"],
+                "login_type": "wechat",
+            },
+        )
+        return RedirectResponse(redirect_url)
+
+    return JSONResponse(login_result)
+
+
+@auth_wechat_router.post("/mini/login")
+async def wechat_mini_login(request: Request, body: MiniProgramLoginRequest):
+    service.ensure_wechat_mini_settings()
+
+    session_data = await service.wechat_mini_exchange_code_for_session(body.code)
+    openid = session_data["openid"]
+    unionid = session_data.get("unionid")
+
+    login_result = await service.finalize_wechat_login(
+        redis=request.app.state.redis,
+        provider=service.WECHAT_MINI_PROVIDER,
+        openid=openid,
+        unionid=unionid,
+        profile=None,
+        login_type="wechat_miniapp",
+    )
+    return JSONResponse(login_result)

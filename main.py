@@ -12,6 +12,7 @@ from app.api.ai_assist.routes import ai_router
 from app.api.article_director.routes import article_router
 from app.api.culture_share.routes import culture_share_router
 from app.api.make_comments.routes import comment_router
+from app.api.miniapp.routes import miniapp_router
 from app.api.pronounciation_test.routes import pron_test_router
 from app.api.redis_test import redis_test_router
 from app.api.search_dict.routes import dict_search
@@ -73,6 +74,7 @@ app.include_router(word_comment_router, tags=["Word Comment API"], prefix="/comm
 app.include_router(pron_test_router, tags=["Pron Test API"], prefix="/test/pron")
 
 app.include_router(culture_share_router, tags=["Culture Share API"], prefix="/culture_share")
+app.include_router(miniapp_router, tags=["Miniapp API"], prefix="/miniapp")
 
 app.include_router(article_router, tags=["Article API"])
 

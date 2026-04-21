@@ -10,6 +10,7 @@ from app.api.admin.admin_articles.admin_articles_schemas import ArticleCreatePay
 from app.core.redis import redis_delete
 from app.models.articles import Article, ArticlePicture, ArticleTag, Banner
 from app.utils.article_content import sanitize_html, strip_html_tags
+from app.utils.media_image import build_optimized_banner_image_url
 from settings import ROOT_DIR
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -465,7 +466,8 @@ async def switch_article_banner(
 
         final_title = (title.strip() if title else article.title).strip()
         final_subtitle = subtitle.strip() if subtitle else article.summary
-        final_image_url = image_url or article.cover_url
+        raw_image_url = image_url or article.cover_url
+        final_image_url = build_optimized_banner_image_url(raw_image_url) if raw_image_url else raw_image_url
         final_target_url = target_url or f"/culture_share/article/{article.article_id}"
         final_sort_order = sort_order if sort_order is not None else 0
 

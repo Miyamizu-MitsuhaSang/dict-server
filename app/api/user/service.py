@@ -1,5 +1,6 @@
 import random
 import re
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
@@ -12,6 +13,13 @@ from app.core.email_utils import send_email
 from app.core.reset_utils import create_reset_token, save_reset_jti, verify_and_consume_reset_token, ResetTokenError
 from app.models.base import ReservedWords, User
 from settings import settings
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 20
+REFRESH_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_SECONDS = ACCESS_TOKEN_EXPIRE_HOURS * 60 * 60
+REFRESH_TOKEN_EXPIRE_SECONDS = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+REFRESH_TOKEN_PREFIX = "auth:refresh"
 
 
 # 登陆校验
@@ -223,7 +231,9 @@ async def is_reset_password(redis: Redis, token: str):
 
 def token_issuer(
         user_id: str,
-        is_admin: bool
+        is_admin: bool,
+        *,
+        login_type: str = "password",
 ) -> str:
     """
     登录 token 生成器
@@ -242,10 +252,143 @@ def token_issuer(
     """
     payload = {
         "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
+        "exp": datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
         "is_admin": is_admin,
+        "type": "access",
+        "login_type": login_type,
     }
 
-    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
     return token
+
+
+def _refresh_key(jti: str) -> str:
+    return f"{REFRESH_TOKEN_PREFIX}:{jti}"
+
+
+def _encode_refresh_token(user_id: int, jti: str, *, login_type: str = "password") -> str:
+    payload = {
+        "user_id": user_id,
+        "jti": jti,
+        "type": "refresh",
+        "login_type": login_type,
+        "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_refresh_token(refresh_token: str) -> dict:
+    try:
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="refresh token 已过期")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="无效的 refresh token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="token 类型错误")
+    if not payload.get("jti") or not payload.get("user_id"):
+        raise HTTPException(status_code=401, detail="refresh token 载荷缺失")
+
+    return payload
+
+
+async def save_refresh_session(redis: Redis, user_id: int, jti: str) -> None:
+    await redis.set(_refresh_key(jti), str(user_id), ex=REFRESH_TOKEN_EXPIRE_SECONDS)
+
+
+async def revoke_refresh_session(redis: Redis, jti: str) -> None:
+    await redis.delete(_refresh_key(jti))
+
+
+async def issue_token_pair(
+        redis: Redis,
+        user_id: int,
+        is_admin: bool,
+        *,
+        login_type: str = "password",
+) -> dict:
+    access_token = token_issuer(
+        user_id=user_id,
+        is_admin=is_admin,
+        login_type=login_type,
+    )
+    refresh_jti = secrets.token_urlsafe(24)
+    refresh_token = _encode_refresh_token(
+        user_id=user_id,
+        jti=refresh_jti,
+        login_type=login_type,
+    )
+    await save_refresh_session(redis=redis, user_id=user_id, jti=refresh_jti)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_SECONDS,
+        "refresh_expires_in": REFRESH_TOKEN_EXPIRE_SECONDS,
+    }
+
+
+def serialize_user(user: User, *, login_type: str | None = None) -> dict:
+    lang_pref = "private"
+    if getattr(user, "language", None) is not None:
+        lang_pref = user.language.code
+
+    return {
+        "id": user.id,
+        "username": user.name,
+        "is_admin": user.is_admin,
+        "lang_pref": lang_pref,
+        "portrait": user.portrait,
+        "login_type": login_type,
+    }
+
+
+async def build_login_response(
+        redis: Redis,
+        user: User,
+        *,
+        login_type: str = "password",
+        is_new_user: bool = False,
+) -> dict:
+    if getattr(user, "language", None) is None:
+        await user.fetch_related("language")
+
+    token_pair = await issue_token_pair(
+        redis=redis,
+        user_id=user.id,
+        is_admin=user.is_admin,
+        login_type=login_type,
+    )
+
+    return {
+        **token_pair,
+        "user": serialize_user(user, login_type=login_type),
+        "is_new_user": is_new_user,
+    }
+
+
+async def refresh_user_session(redis: Redis, refresh_token: str) -> dict:
+    payload = decode_refresh_token(refresh_token)
+    user_id = int(payload["user_id"])
+    jti = payload["jti"]
+
+    stored_user_id = await redis.get(_refresh_key(jti))
+    if stored_user_id is None or stored_user_id != str(user_id):
+        raise HTTPException(status_code=401, detail="refresh token 已失效")
+
+    user = await User.get_or_none(id=user_id).prefetch_related("language")
+    if not user:
+        await revoke_refresh_session(redis=redis, jti=jti)
+        raise HTTPException(status_code=401, detail="用户不存在")
+
+    await revoke_refresh_session(redis=redis, jti=jti)
+
+    login_type = payload.get("login_type") or "password"
+    return await build_login_response(
+        redis=redis,
+        user=user,
+        login_type=login_type,
+    )

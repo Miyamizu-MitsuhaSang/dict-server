@@ -42,6 +42,9 @@ async def _decode_and_load_user(token: str) -> Tuple[User, Dict]:
     user_id = payload.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="无效 token 载荷")
+    token_type = payload.get("type")
+    if token_type == "refresh":
+        raise HTTPException(status_code=401, detail="请使用 access token 访问接口")
     user = await User.get_or_none(id=user_id)
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")
@@ -55,6 +58,7 @@ async def get_current_user_basic(request: Request) -> Tuple[User, Dict]:
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
 
 
 async def get_current_user_with_oauth(
@@ -70,6 +74,24 @@ async def get_current_user(
     if settings.USE_OAUTH:
         return await get_current_user_with_oauth(token)
     return await get_current_user_basic(request)
+
+
+async def get_optional_current_user(
+        request: Request,
+        token: Annotated[str | None, Depends(optional_oauth2_scheme)] = None,
+) -> Tuple[User, Dict] | None:
+    try:
+        if settings.USE_OAUTH:
+            if not token:
+                return None
+            return await _decode_and_load_user(token)
+
+        auth = request.headers.get("Authorization")
+        if not auth:
+            return None
+        return await get_current_user_basic(request)
+    except HTTPException:
+        return None
 
 
 async def is_admin_user(

@@ -1,7 +1,7 @@
 import asyncio
 from typing import Literal, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, HTTPException, Request, Form
 
 from app.api.search_dict import service
 from app.api.search_dict.search_schemas import SearchRequest, WordSearchResponse, SearchItemFr, SearchItemJp, \
@@ -11,7 +11,6 @@ from app.models import DefinitionJp, CommentFr, CommentJp, WordlistFr
 from app.models.fr import DefinitionFr, ProverbFr
 from app.models.jp import IdiomJp, WordlistJp
 from app.utils.all_kana import all_in_kana
-from app.utils.security import get_current_user
 from app.utils.textnorm import normalize_text
 
 dict_search = APIRouter()
@@ -58,7 +57,7 @@ async def __get_comments(
 
 
 @dict_search.post("/search/word", response_model=WordSearchResponse)
-async def search(request: Request, body: SearchRequest, user=Depends(get_current_user)):
+async def search(request: Request, body: SearchRequest):
     """
     精确搜索
     :param request:
@@ -71,10 +70,10 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
     query = body.query
 
     if body.language == 'fr':
-        query = normalize_text(query)
+        search_query = normalize_text(query)
         word_contents = await (
             DefinitionFr
-            .filter(word__text=query)
+            .filter(word__search_text=search_query)
             .prefetch_related("word")
         )
         if not word_contents:
@@ -106,7 +105,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
         await service.search_time_updates(redis)
 
         return WordSearchResponse(
-            query=query,
+            query=first_word.text,
             pos=pos_contents,
             contents=contents,
         )
@@ -150,7 +149,7 @@ async def search(request: Request, body: SearchRequest, user=Depends(get_current
 # TODO 输入搜索框时反馈内容
 
 @dict_search.post("/search/list/word")
-async def search_word_list(query_word: SearchRequest, user=Depends(get_current_user)):
+async def search_word_list(query_word: SearchRequest):
     """
     检索时的提示接口
     :param query_word: 用户输入的内容
@@ -216,7 +215,7 @@ async def search_word_list(query_word: SearchRequest, user=Depends(get_current_u
 
 
 @dict_search.post("/search/list/proverb")
-async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get_current_user)):
+async def search_proverb_list(query_word: ProverbSearchRequest):
     query, lang, transable = await service.detect_language(text=query_word.query)
     query = normalize_text(query_word.query) if lang == "fr" else query_word.query
     suggest_proverbs = await service.suggest_proverb(
@@ -229,7 +228,7 @@ async def search_proverb_list(query_word: ProverbSearchRequest, user=Depends(get
 
 
 @dict_search.post("/search/proverb")
-async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_user)):
+async def search_proverb(proverb_id: int = Form(...)):
     result = await service.accurate_idiom_proverb(search_id=proverb_id, model=ProverbFr,
                                                   only_fields=["id", "text", "chi_exp"])
 
@@ -239,7 +238,6 @@ async def search_proverb(proverb_id: int = Form(...), user=Depends(get_current_u
 @dict_search.post("/search/list/idiom")
 async def search_idiom_list(
         query_idiom: ProverbSearchRequest,
-        user=Depends(get_current_user)
 ):
     """日语成语检索接口（带语言检测与分类逻辑）"""
 
@@ -348,7 +346,7 @@ async def search_idiom_list(
 
 
 @dict_search.post("/search/idiom")
-async def search_idiom(query_id: int, user=Depends(get_current_user)):
+async def search_idiom(query_id: int):
     result = await service.accurate_idiom_proverb(search_id=query_id, model=IdiomJp,
                                                   only_fields=["id", "text", "search_text", "chi_exp", "example"])
     return {"result": result}

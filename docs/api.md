@@ -1,6 +1,6 @@
 # FastAPI  
 版本：2.0  
-最后更新：2026-03-12
+最后更新：2026-04-18
 
 **认证方式**  
 除特别说明外，接口均需要在 Header 中携带 `Authorization: Bearer <token>`。
@@ -67,9 +67,123 @@
 | password| string | 是   | 登录密码 |
 
 #### 响应
-**200 成功**：返回 `access_token`、`token_type` 以及用户信息 `{id, username, is_admin, lang_pref}`。  
+**200 成功**：返回：
+- `access_token`：JWT 访问令牌，当前仍保持 **20 小时**有效
+- `refresh_token`：刷新令牌，默认 **30 天**有效
+- `token_type`：固定为 `bearer`
+- `expires_in`：`access_token` 有效秒数（当前为 `72000`）
+- `refresh_expires_in`：`refresh_token` 有效秒数（当前为 `2592000`）
+- `user`：`{id, username, is_admin, lang_pref, portrait, login_type}`
+- `is_new_user`：固定为 `false`
 **404**：用户不存在  
 **400**：用户名或密码错误
+
+---
+
+### Refresh Session
+**Method**: `POST`  
+**Path**: `/users/refresh`
+
+#### 请求体
+| 字段          | 类型   | 必填 | 说明 |
+|---------------|--------|------|------|
+| refresh_token | string | 是   | 登录成功后返回的刷新令牌 |
+
+#### 响应
+**200 成功**：返回一组新的 `access_token`、`refresh_token`、`token_type`、`expires_in`、`refresh_expires_in`，并附带当前用户信息 `user`。  
+**401**：`refresh token 已过期`、`无效的 refresh token`、`refresh token 已失效`
+
+#### 说明
+- 刷新成功后，旧的 `refresh_token` 会立刻失效（轮换机制）。
+- 本次升级 **未缩短** 现有 `access_token` 的 20 小时有效期，网页前端可平滑升级。
+
+---
+
+### Current User
+**Method**: `GET`  
+**Path**: `/users/me`  
+需要认证
+
+#### 响应
+**200 成功**：`{id, username, is_admin, lang_pref, portrait, login_type}`  
+**401**：未携带有效 Bearer Token，或传入了 `refresh_token`
+
+---
+
+### WeChat Login Redirect
+**Method**: `GET`  
+**Path**: `/users/auth/wechat/login`
+
+#### 说明
+- 用于网站扫码登录。
+- 服务端会生成防 CSRF 的 `state`，写入 Redis，并重定向到微信开放平台授权页。
+- 依赖环境变量：`WECHAT_MINI_APPID`、`WECHAT_MINIAPP_SECRET`、`WECHAT_REDIRECT_URI`。
+
+#### 响应
+- **307**：重定向到微信扫码授权页  
+- **500**：微信登录配置缺失
+
+---
+
+### WeChat Login Callback
+**Method**: `GET`  
+**Path**: `/users/auth/wechat/callback`
+
+#### Query
+| 参数  | 类型   | 必填 | 说明 |
+|-------|--------|------|------|
+| code  | string | 是   | 微信授权成功后返回的 code |
+| state | string | 是   | 登录发起时生成的 state，用于防 CSRF |
+
+#### 说明
+- 服务端会校验 `state`，然后用 `code` 换取 `openid/access_token`。
+- 若站内不存在对应微信身份，则自动创建一个本地账号：
+  使用 `wx_随机串` 作为用户名、`wechat_<openid>@wx.local` 形式的占位邮箱、随机密码哈希，默认语言为 `private`。
+- 最终仍返回与普通登录一致的站内 JWT，可直接访问现有受保护接口。
+- 若配置了 `WECHAT_CALLBACK_SUCCESS_URL`，则成功后会重定向到前端地址并附带 `token`；若配置了 `WECHAT_CALLBACK_FAILURE_URL`，失败时会重定向并附带 `error`。
+
+#### 响应
+**200 成功**：未配置前端跳转地址时，返回：
+- `access_token`
+- `refresh_token`
+- `token_type`
+- `expires_in`
+- `refresh_expires_in`
+- `user`: `{id, username, is_admin, lang_pref, portrait, login_type}`
+- `is_new_user`
+
+**307**：若配置了前端回跳地址，则重定向回前端  
+**400**：`state` 无效、已过期，或微信返回错误  
+**500**：微信登录配置缺失
+
+---
+
+### WeChat Mini Program Login
+**Method**: `POST`  
+**Path**: `/users/auth/wechat/mini/login`
+
+#### 请求体
+| 字段 | 类型   | 必填 | 说明 |
+|------|--------|------|------|
+| code | string | 是   | 小程序端 `wx.login()` 返回的临时登录凭证 |
+
+#### 说明
+- 服务端调用微信 `jscode2session` 换取 `openid/session_key/unionid`。
+- 若同一微信体系下已有 `unionid` 对应账号，会自动复用原站内用户，避免 Web 扫码登录与小程序登录产生重复账号。
+- 依赖环境变量：`WECHAT_MINI_APPID`、`WECHAT_MINIAPP_SECRET`。
+
+#### 响应
+**200 成功**：返回：
+- `access_token`
+- `refresh_token`
+- `token_type`
+- `expires_in`
+- `refresh_expires_in`
+- `user`: `{id, username, is_admin, lang_pref, portrait, login_type}`
+- `is_new_user`：是否首次为该微信身份创建站内用户
+
+**400**：微信返回错误或 `code` 无效  
+**500**：小程序微信配置缺失
 
 ---
 
@@ -77,6 +191,11 @@
 **Method**: `POST`  
 **Path**: `/users/logout`  
 需要认证
+
+#### 请求体
+| 字段          | 类型   | 必填 | 说明 |
+|---------------|--------|------|------|
+| refresh_token | string | 否   | 若传入，将同时撤销这组 refresh 会话 |
 
 #### 响应
 - **200**：`{"message": "logout ok"}`  
@@ -260,6 +379,29 @@
 ## Culture Share API
 前缀：`/culture_share`。  
 `/culture_share/banners` 默认无需认证；其余文章相关接口需要登录认证。
+
+------
+
+## Miniapp API
+前缀：`/miniapp`。  
+面向微信小程序首页的聚合接口，默认无需认证。
+
+### Miniapp Home
+**Method**: `GET`  
+**Path**: `/miniapp/home`
+
+#### 响应
+`{`
+`  "banners": [{id, title, subtitle, image_url, target_url, sort_order, is_active, start_at, end_at}, ...],`
+`  "hot_tags": [{tag_id, name, usage_count}, ...],`
+`  "featured_articles": [{article_id, title, summary, source, cover_url, category, tags, publish_at, created_at}, ...],`
+`  "quick_entries": [{key, title, subtitle, target_page}, ...]`
+`}`
+
+#### 说明
+- `banners` 复用现有轮播逻辑；
+- `hot_tags` 与 `featured_articles` 直接从文化分享模块聚合；
+- `quick_entries` 为小程序首页快捷入口配置，便于前端减少硬编码。
 
 ### Home Banners
 **Method**: `GET`  

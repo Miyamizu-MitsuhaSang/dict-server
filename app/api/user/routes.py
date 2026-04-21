@@ -1,17 +1,16 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Tuple, Dict
 
 import redis.asyncio as redis
 from fastapi import APIRouter, HTTPException, Depends, Request
-from jose import jwt
 from tortoise.exceptions import IntegrityError
 
 from app.api.user.user_schemas import UserIn, UpdateUserRequest, UserLoginRequest, UserResetPhoneRequest, \
-    VerifyPhoneCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest
+    VerifyPhoneCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest, RefreshTokenRequest, \
+    LogoutRequest
 from app.core.redis import get_redis
 from app.models.base import ReservedWords, User, Language
 from app.utils.security import get_current_user
-from settings import settings
 from . import service
 from .auth_wechat.routes import auth_wechat_router
 
@@ -37,9 +36,9 @@ async def register(req: Request, user_in: UserIn):
 
     lang_pref = await Language.get(code=user_in.lang_pref)
 
-    encrypted_phone = (
-        req.app.state.phone_encrypto.encrypt(user_in.phone)) \
-        if user_in.phone else None
+    phone = req.app.state.phone_encrypto.normalize(user_in.phone) if user_in.phone else None
+    encrypted_phone = req.app.state.phone_encrypto.encrypt(phone) if phone else None
+    phone_hash = req.app.state.phone_encrypto.hash(phone) if phone else None
 
     try:
         new_user = await User.create(
@@ -48,17 +47,12 @@ async def register(req: Request, user_in: UserIn):
             pwd_hashed=hashed_pwd,
             language=lang_pref,
             encrypted_phone=encrypted_phone,
+            phone_hash=phone_hash,
         )
     except IntegrityError:
-        raise HTTPException(status_code=400, detail="邮箱已被注册")
+        raise HTTPException(status_code=400, detail="邮箱或手机号已被注册")
 
-    payload = {
-        "user_id": new_user.id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
-        "is_admin": new_user.is_admin,
-    }
-
-    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+    token = service.token_issuer(user_id=new_user.id, is_admin=new_user.is_admin)
 
     return {
         "id": new_user.id,
@@ -97,24 +91,40 @@ async def user_modification(updated_user: UpdateUserRequest,
     :param current_user:
     :return:
     """
+    user, _ = current_user
     reserved_words = await ReservedWords.filter(category="username").values_list("reserved", flat=True)
     # 验证当前密码
-    if not await service.verify_password(updated_user.current_password, current_user.password_hash):
+    if not updated_user.current_password:
+        raise HTTPException(status_code=400, detail="缺少当前密码")
+    if not await service.verify_password(updated_user.current_password, user.pwd_hashed):
         raise HTTPException(status_code=400, detail="原密码错误")
 
     # 修改用户名（如果提供）
     if updated_user.new_username:
         if updated_user.new_username.lower() in reserved_words:
             raise HTTPException(status_code=400, detail="用户名为保留关键词，请更换")
-        current_user.username = updated_user.new_username
+        user.name = updated_user.new_username
 
     # 修改密码（如果提供）
     if updated_user.new_password:
-        current_user.password_hash = service.hash_password(updated_user.new_password)
+        await service.validate_password(updated_user.new_password)
+        user.pwd_hashed = service.hash_password(updated_user.new_password)
+
+    if updated_user.new_language:
+        lang_pref = await Language.get(code=updated_user.new_language)
+        user.language = lang_pref
+
+    await user.save()
+    await user.fetch_related("language")
+
+    return {
+        "message": "用户信息更新成功",
+        "user": service.serialize_user(user),
+    }
 
 
 @users_router.post("/login")
-async def user_login(user_in: UserLoginRequest):
+async def user_login(request: Request, user_in: UserLoginRequest):
     user = await User.get_or_none(name=user_in.name).prefetch_related("language")
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -122,32 +132,35 @@ async def user_login(user_in: UserLoginRequest):
     if not await service.verify_password(user_in.password, user.pwd_hashed):
         raise HTTPException(status_code=400, detail="用户名或密码错误")
 
-    # token 中放置的信息
-    payload = {
-        "user_id": user.id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=20),  # 设置过期时间
-        "is_admin": user.is_admin,
-    }
+    return await service.build_login_response(
+        redis=request.app.state.redis,
+        user=user,
+        login_type="password",
+    )
 
-    token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "username": user.name,
-            "is_admin": user.is_admin,
-            "lang_pref": user.language.code
-        }
-    }
+@users_router.post("/refresh")
+async def refresh_session(request: Request, data: RefreshTokenRequest):
+    return await service.refresh_user_session(
+        redis=request.app.state.redis,
+        refresh_token=data.refresh_token,
+    )
+
+
+@users_router.get("/me")
+async def get_my_profile(user_payload: Tuple[User, Dict] = Depends(get_current_user)):
+    user, payload = user_payload
+    await user.fetch_related("language")
+    login_type = payload.get("login_type")
+    return service.serialize_user(user, login_type=login_type)
 
 
 @users_router.post("/logout")
 async def user_logout(
         request: Request,
         redis_client: redis.Redis = Depends(get_redis),
-        user_data: Tuple[User, Dict] = Depends(get_current_user)
+        user_data: Tuple[User, Dict] = Depends(get_current_user),
+        body: LogoutRequest | None = None,
 ):
     user, payload = user_data
     token = request.headers.get("Authorization")
@@ -163,25 +176,35 @@ async def user_logout(
 
     await redis_client.setex(f"blacklist:{raw_token}", ttl, "true")
 
+    if body and body.refresh_token:
+        try:
+            refresh_payload = service.decode_refresh_token(body.refresh_token)
+        except HTTPException:
+            refresh_payload = None
+
+        if refresh_payload and int(refresh_payload.get("user_id")) == user.id:
+            await service.revoke_refresh_session(redis=redis_client, jti=refresh_payload["jti"])
+
     return {"message": "logout ok"}
 
 
 # 后续通过参数合并
 @users_router.post("/auth/forget-password/phone", deprecated=True)
 async def forget_password(request: Request, user_request: UserResetPhoneRequest):
-    encrypted_phone = request.app.state.phone_encrypto.encrypt(phone=user_request.phone)
-    user = await User.get_or_none(encrypted_phone=encrypted_phone)
+    phone = request.app.state.phone_encrypto.normalize(user_request.phone_number)
+    phone_hash = request.app.state.phone_encrypto.hash(phone)
+    user = await User.get_or_none(phone_hash=phone_hash)
 
     if not user:
         raise HTTPException(status_code=404, detail="User does not exists")
 
-    redis = request.app.state.Redis
+    redis = request.app.state.redis
     code = service.generate_code()
-    await service.save_code_redis(redis, phone=user_request.phone_number, code=code)
+    await service.save_code_redis(redis, phone=phone, code=code)
 
     # TODO 短信服务
 
-    print(f"[DEBUG] 给 {user_request.phone_number} 发送验证码：{code}")
+    print(f"[DEBUG] 给 {phone} 发送验证码：{code}")
 
     return {"message": "验证码已发送"}
 
@@ -191,7 +214,8 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
 @users_router.post("/auth/varify_code", deprecated=True)
 async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     redis = request.app.state.redis
-    if not await service.verify_code(redis=redis, phone=data.phone, input_code=data.code):
+    phone = request.app.state.phone_encrypto.normalize(data.phone)
+    if not await service.varify_phone_code(redis=redis, phone=phone, input_code=data.code):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
     return {"message": "验证成功，可以重置密码"}
 
@@ -246,4 +270,4 @@ async def reset_password(request: Request, reset_request: UserResetPasswordReque
 
     await User.filter(id=user_id).update(pwd_hashed=new_password)
 
-    return {"massage": "密码重置成功"}
+    return {"message": "密码重置成功"}

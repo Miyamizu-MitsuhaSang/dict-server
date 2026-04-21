@@ -5,7 +5,7 @@ import tempfile
 from typing import Literal, Tuple, Dict
 
 import azure.cognitiveservices.speech as speechsdk
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form, Query
 from starlette.requests import Request
 
 from app.api.pronounciation_test import service
@@ -22,11 +22,19 @@ speech_config = speechsdk.SpeechConfig(subscription=AZURE_KEY, region=SERVICE_RE
 audio_config = speechsdk.audio.AudioConfig(filename="test.wav")
 
 
+def _get_pronunciation_model(lang: Literal["fr-FR", "ja-JP"]):
+    if lang == "fr-FR":
+        return PronunciationTestFr
+    if lang == "ja-JP":
+        return PronunciationTestJp
+    raise HTTPException(status_code=400, detail="Unsupported language code")
+
+
 @pron_test_router.get("/start")
 async def start_test(
         request: Request,
         count: int = 20,
-        lang: Literal["fr-FR", "ja-JP"] = Form("fr-FR"),
+        lang: Literal["fr-FR", "ja-JP"] = Query("fr-FR"),
         user: Tuple[User, Dict] = Depends(get_current_user)
 ):
     """
@@ -52,14 +60,8 @@ async def start_test(
         }
 
     # === 根据语言选择对应题库 ===
-    if lang == "fr-FR":
-        total_count = await PronunciationTestFr.all().count()
-        table = PronunciationTestFr
-    elif lang == "ja-JP":
-        total_count = await PronunciationTestJp.all().count()
-        table = PronunciationTestJp
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported language code")
+    table = _get_pronunciation_model(lang)
+    total_count = await table.all().count()
 
     # === 随机抽取句子 ID ===
     if total_count == 0:
@@ -111,13 +113,18 @@ async def pron_sentence_test(
     session = json.loads(data)
     sentence_ids = session["sentence_ids"]
     index = session["current_index"]
+    session_lang = session["lang"]
+
+    if lang != session_lang:
+        raise HTTPException(status_code=400, detail="Language does not match active test session")
 
     if index >= len(sentence_ids):
         await redis.delete(key)
         return {"ok": True, "finished": True, "message": "All sentences tested"}
 
     sentence_id = sentence_ids[index]
-    sentence = await PronunciationTestFr.get(id=sentence_id)
+    sentence_model = _get_pronunciation_model(session_lang)
+    sentence = await sentence_model.get_or_none(id=sentence_id)
     if not sentence:
         raise HTTPException(status_code=404, detail=f"Sentence {sentence_id} not found")
     text = sentence.text
@@ -141,7 +148,7 @@ async def pron_sentence_test(
         raise HTTPException(status_code=415, detail="Invalid audio format")
 
     try:
-        result = service.assess_pronunciation(norm_path, text, lang)
+        result = service.assess_pronunciation(norm_path, text, session_lang)
         if not result["ok"]:
             raise HTTPException(status_code=400, detail=result)
     except HTTPException as e:
@@ -184,10 +191,12 @@ async def get_current_sentence(
     session = json.loads(data)
     sentence_ids = session["sentence_ids"]
     index = session["current_index"]
+    session_lang = session["lang"]
     if index >= len(sentence_ids):
         return {"ok": True, "finished": True, "message": "All sentences tested"}
     sentence_id = sentence_ids[index]
-    sentence = await PronunciationTestFr.get(id=sentence_id)
+    sentence_model = _get_pronunciation_model(session_lang)
+    sentence = await sentence_model.get_or_none(id=sentence_id)
     if not sentence:
         return {"ok": False, "error": "Sentence not found"}
     text = sentence.text
@@ -196,6 +205,7 @@ async def get_current_sentence(
         "ok": True,
         "index": index,
         "current_sentence": text,
+        "total": session.get("total"),
     }
 
 
@@ -214,10 +224,12 @@ async def get_testlist(
 
     session = json.loads(data)
     sentence_ids = session["sentence_ids"]
+    session_lang = session["lang"]
+    sentence_model = _get_pronunciation_model(session_lang)
     sentences = []
 
     for sentence_id in sentence_ids:
-        sentence = await PronunciationTestFr.get(id=sentence_id)
+        sentence = await sentence_model.get_or_none(id=sentence_id)
         if not sentence:
             raise HTTPException(status_code=404, detail=f"Sentence {sentence_id} not found")
         text = sentence.text

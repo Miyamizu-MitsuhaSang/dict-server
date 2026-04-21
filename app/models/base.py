@@ -28,6 +28,7 @@ class User(Model):
     portrait = fields.CharField(max_length=120, default='#', description="用户头像")
     email = fields.CharField(max_length=120, description="e-mail", unique=True)
     encrypted_phone = fields.CharField(max_length=128, description="用户手机号", null=True)
+    phone_hash = fields.CharField(max_length=64, description="手机号查询哈希", null=True, unique=True)
     language = fields.ForeignKeyField("models.Language", related_name="users", on_delete=fields.CASCADE)
     is_admin = fields.BooleanField(default=False, description="管理员权限")
     token_usage = fields.IntField(default=0, description="AI答疑使用量")
@@ -35,6 +36,22 @@ class User(Model):
 
     class Meta:
         table = "users"
+
+
+class OAuthIdentity(Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="oauth_identities", on_delete=fields.CASCADE)
+    provider = fields.CharField(max_length=20, description="第三方登录提供方")
+    openid = fields.CharField(max_length=128, description="开放平台 openid")
+    unionid = fields.CharField(max_length=128, null=True, description="开放平台 unionid")
+    profile = fields.JSONField(null=True, description="第三方用户资料快照")
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "oauth_identities"
+        unique_together = (("provider", "openid"),)
+        indexes = (("provider", "unionid"),)
 
 
 class ReservedWords(Model):

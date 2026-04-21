@@ -1,7 +1,8 @@
 from typing import Dict, Tuple
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body, Query
+from pydantic import BaseModel
 from starlette.requests import Request
 
 from app.api.ai_assist import service
@@ -19,6 +20,10 @@ AI_API_KEY = settings.AI_ASSIST_KEY
 MAX_USAGE_PER = 100
 
 CHAT_TTL = 7200
+
+
+class ClearHistoryRequest(BaseModel):
+    word: str
 
 
 @ai_router.post("/word/exp", deprecated=False)
@@ -105,8 +110,17 @@ async def universal_main():
 
 
 @ai_router.post("/clear")
-async def clear_history(word: str, request: Request, user: Tuple[User, Dict] = Depends(get_current_user)):
+async def clear_history(
+        request: Request,
+        payload: ClearHistoryRequest | None = Body(default=None),
+        word: str | None = Query(default=None),
+        user: Tuple[User, Dict] = Depends(get_current_user),
+):
     redis = request.app.state.redis
     user_id = str(user[0].id)
-    await clear_chat_history(redis, user_id, word)
-    return {"msg": f"已清除 {word} 的聊天记录"}
+    target_word = payload.word if payload else word
+    if not target_word:
+        raise HTTPException(status_code=422, detail="缺少 word 参数")
+
+    await clear_chat_history(redis, user_id, target_word)
+    return {"msg": f"已清除 {target_word} 的聊天记录"}

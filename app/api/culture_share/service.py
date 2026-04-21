@@ -6,6 +6,7 @@ from tortoise.expressions import Q
 from app.api.culture_share.culture_share_schemas import BannerArticle
 from app.core.redis import redis_get_json, redis_set_json
 from app.models.articles import Article, ArticleTag, Banner
+from app.utils.media_image import build_optimized_banner_image_url
 
 
 async def get_active_banners_with_cache(
@@ -30,10 +31,13 @@ async def get_active_banners_with_cache(
         "sort_order", "-created_at"
     ).limit(limit)
 
-    items = [
-        BannerArticle.model_validate(banner).model_dump(mode="json")
-        for banner in banners
-    ]
+    items = []
+    for banner in banners:
+        data = BannerArticle.model_validate(banner).model_dump(mode="json")
+        optimized_url = build_optimized_banner_image_url(data.get("image_url"))
+        if optimized_url:
+            data["image_url"] = optimized_url
+        items.append(data)
 
     await redis_set_json(cache_key, items, ex=300)
 

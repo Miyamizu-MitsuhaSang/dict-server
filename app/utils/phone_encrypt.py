@@ -1,5 +1,8 @@
 import base64
+import hashlib
+import hmac
 import os
+import re
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
@@ -30,6 +33,19 @@ class PhoneEncrypt:
         iv = base64.b64encode(cipher.iv).decode()
         ct = base64.b64encode(ct_bytes).decode()
         return f"{iv}:{ct}"
+
+    @staticmethod
+    def normalize(phone: str) -> str:
+        value = re.sub(r"[\s-]", "", phone or "")
+        if value.startswith("+86"):
+            value = value[3:]
+        elif value.startswith("0086"):
+            value = value[4:]
+        return value
+
+    def hash(self, phone: str) -> str:
+        normalized_phone = self.normalize(phone)
+        return hmac.new(self.key, normalized_phone.encode(), hashlib.sha256).hexdigest()
 
     def decrypt(self, data: str) -> str:
         """解密 Base64 字符串 -> 返回手机号"""

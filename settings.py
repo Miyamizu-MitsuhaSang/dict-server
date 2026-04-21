@@ -55,8 +55,11 @@ ONLINE_SETTINGS = {
 class Settings(BaseSettings):
     USE_OAUTH: bool = False
 
-    WECHAT_SECRET: str
-    WECHAT_APPID: str
+    WECHAT_MINIAPP_SECRET: str = ""
+    WECHAT_MINI_APPID: str = ""
+    WECHAT_REDIRECT_URI: str = ""
+    WECHAT_CALLBACK_SUCCESS_URL: str = ""
+    WECHAT_CALLBACK_FAILURE_URL: str = ""
 
     SECRET_KEY: str
     BAIDU_APPID: str
