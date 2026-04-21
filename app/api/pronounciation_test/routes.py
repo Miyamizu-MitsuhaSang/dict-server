@@ -17,6 +17,7 @@ pron_test_router = APIRouter()
 
 AZURE_KEY = settings.AZURE_SUBSCRIPTION_KEY
 SERVICE_REGION = "eastasia"
+SUPPORTED_AUDIO_SUFFIXES = {".wav", ".mp3", ".aac", ".m4a"}
 
 speech_config = speechsdk.SpeechConfig(subscription=AZURE_KEY, region=SERVICE_REGION)
 audio_config = speechsdk.audio.AudioConfig(filename="test.wav")
@@ -92,6 +93,7 @@ async def pron_sentence_test(
         request: Request,
         record: UploadFile = File(...),
         lang: Literal["fr-FR", "ja-JP"] = Form("fr-FR"),
+        audio_format: str = Form(""),
         user: Tuple[User, Dict] = Depends(get_current_user)
 ):
     """
@@ -129,34 +131,45 @@ async def pron_sentence_test(
         raise HTTPException(status_code=404, detail=f"Sentence {sentence_id} not found")
     text = sentence.text
 
-    if not record.filename.endswith(".wav"):
-        raise HTTPException(status_code=415, detail="Invalid file suffix, only '.wav' supported")
+    suffix = os.path.splitext(record.filename or "")[1].lower()
+    if not suffix and audio_format:
+        suffix = f".{audio_format.lstrip('.').lower()}"
+    if suffix not in SUPPORTED_AUDIO_SUFFIXES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Invalid audio suffix, supported: {', '.join(sorted(SUPPORTED_AUDIO_SUFFIXES))}"
+        )
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(record.filename)[1]) as tmp:
-        tmp.write(await record.read())
-        tmp.flush()
-        src_path = tmp.name
-
-    # 调用转换函数
-    norm_path = src_path + "_norm.wav"
-    result = service.convert_to_pcm16_mono_wav(src_path, norm_path)
-    if not result["ok"]:
-        raise HTTPException(status_code=400, detail=result["message"])
-
-    # 再验证格式
-    if not service.verify_audio_format(norm_path):
-        raise HTTPException(status_code=415, detail="Invalid audio format")
-
+    src_path = ""
+    norm_path = ""
     try:
-        result = service.assess_pronunciation(norm_path, text, session_lang)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await record.read())
+            tmp.flush()
+            src_path = tmp.name
+
+        # 调用转换函数，将网页端 WAV 与小程序端 MP3/AAC 统一规范化。
+        norm_path = src_path + "_norm.wav"
+        result = service.convert_to_pcm16_mono_wav(src_path, norm_path)
         if not result["ok"]:
-            raise HTTPException(status_code=400, detail=result)
-    except HTTPException as e:
-        return result
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+            raise HTTPException(status_code=400, detail=result["message"])
+
+        # 再验证格式
+        if not service.verify_audio_format(norm_path):
+            raise HTTPException(status_code=415, detail="Invalid audio format")
+
+        try:
+            result = service.assess_pronunciation(norm_path, text, session_lang)
+            if not result["ok"]:
+                raise HTTPException(status_code=400, detail=result)
+        except HTTPException:
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
     finally:
-        os.remove(norm_path)
+        for path in (norm_path, src_path):
+            if path and os.path.exists(path):
+                os.remove(path)
 
     await service.save_pron_result(
         redis=redis,
