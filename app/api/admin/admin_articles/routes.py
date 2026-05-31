@@ -13,6 +13,7 @@ from app.api.admin.admin_articles.admin_articles_schemas import ArticleActionRes
     TagListResponse, BannerSwitchPayload, BannerSwitchResponse, \
     ArticlePublishedStatusResponse, ArticleBannerStatusResponse
 from app.models.base import User
+from app.utils.media_image import build_optimized_cover_thumb_url
 from app.utils.security import is_admin_user
 
 admin_banner_router = APIRouter()
@@ -161,9 +162,16 @@ async def list_articles_api(
         category=category,
         keyword=keyword,
     )
+    list_items: list[ArticleItemResponse] = []
+    for item in items:
+        data = ArticleItemResponse.model_validate(item).model_dump()
+        optimized_cover_url = build_optimized_cover_thumb_url(data.get("cover_url"))
+        if optimized_cover_url:
+            data["cover_url"] = optimized_cover_url
+        list_items.append(ArticleItemResponse(**data))
 
     return ArticleListResponse(
-        items=[ArticleItemResponse.model_validate(item) for item in items],
+        items=list_items,
         total=total,
     )
 
