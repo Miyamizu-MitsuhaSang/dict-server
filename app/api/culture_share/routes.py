@@ -15,6 +15,7 @@ from app.api.culture_share.culture_share_schemas import (
     PopularTagResponse,
 )
 from app.models import User
+from app.utils.media_image import build_optimized_cover_thumb_url
 from app.utils.security import get_optional_current_user
 
 culture_share_router = APIRouter()
@@ -59,12 +60,19 @@ async def list_articles(
         category=category,
         keyword=keyword,
     )
+    list_items: list[ArticleListItem] = []
+    for item in items:
+        data = ArticleListItem.model_validate(item).model_dump()
+        optimized_cover_url = build_optimized_cover_thumb_url(data.get("cover_url"))
+        if optimized_cover_url:
+            data["cover_url"] = optimized_cover_url
+        list_items.append(ArticleListItem(**data))
 
     return ArticleListResponse(
         page=page,
         page_size=page_size,
         total=total,
-        items=[ArticleListItem.model_validate(item) for item in items],
+        items=list_items,
     )
 
 
