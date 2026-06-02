@@ -14,11 +14,12 @@ class UserIn(BaseModel):
     username: str
     password: str
     email: str
-    phone: Optional[str] = None
+    phone: str
     lang_pref: Literal['jp', 'fr', 'private'] = "private"
     portrait: str = default_portrait_url
 
     code: str
+    phone_code: str
 
     @field_validator('email')
     @classmethod
@@ -30,8 +31,6 @@ class UserIn(BaseModel):
     @field_validator('phone')
     @classmethod
     def validate_phone(cls, v):
-        if v is None:
-            return v
         if not re.match(pattern=r"^1[3-9]\d{9}$", string=v):
             raise HTTPException(status_code=400, detail="手机号格式错误")
         return v
@@ -93,6 +92,22 @@ class LogoutRequest(BaseModel):
 
 
 class MiniProgramLoginRequest(BaseModel):
+    code: str
+
+
+class WechatCodeLoginRequest(BaseModel):
+    code: str
+
+
+class WechatBindExistingRequest(BaseModel):
+    bind_ticket: str
+    username: str
+    password: str
+
+
+class WechatPhoneCompleteRequest(BaseModel):
+    bind_ticket: str
+    phone_number: ChinaPhone
     code: str
 
 

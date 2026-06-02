@@ -56,6 +56,12 @@ async def validate_email_exists(email: str):
         raise HTTPException(status_code=400, detail="邮箱已经被使用，请更换其他邮箱后重试")
 
 
+async def validate_phone_available(phone_hash: str):
+    user = await User.get_or_none(phone_hash=phone_hash)
+    if user:
+        raise HTTPException(status_code=400, detail="手机号已经被使用，请更换其他手机号后重试")
+
+
 # 登陆校验
 async def verify_password(raw_password: str, hashed_password: str) -> bool:
     """
@@ -98,7 +104,20 @@ async def save_code_redis(redis: Redis, phone: str, code: str, expire: int = 300
 
 async def varify_phone_code(redis: Redis, phone: str, input_code: str):
     stored = await redis.get(f"sms:{phone}")
-    return stored is not None and stored.decode() == input_code
+    if stored == input_code:
+        await redis.delete(f"sms:{phone}")
+        return True
+    return False
+
+
+async def send_sms_code(redis: Redis, phone: str, code: str, ops_type: Literal["reg", "wechat", "reset"]):
+    await save_code_redis(redis, phone, code)
+    ops_dict = {
+        "reg": "用户注册",
+        "wechat": "微信登录/绑定",
+        "reset": "密码重置",
+    }
+    print(f"[DEBUG][SMS] 给 {phone} 发送验证码：{code}，用途：{ops_dict[ops_type]}")
 
 
 # EMAIL

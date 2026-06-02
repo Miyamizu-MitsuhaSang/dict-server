@@ -1,0 +1,38 @@
+@startuml
+!pragma useLayout legacy
+skinparam backgroundColor transparent
+skinparam defaultFontName "PingFang SC"
+skinparam defaultFontSize 14
+skinparam RankSep 50
+skinparam NodeSep 40
+skinparam shadowing false
+skinparam ArrowThickness 1
+
+title 模型微调全局流程
+
+start
+
+:业务日志与词典使用数据收集;
+:数据清洗/脱敏/格式化;
+:人工或规则标注训练样本;
+:划分训练/验证集;
+:上传至对象存储并登记元数据;
+:触发微调任务（Cron/手动）;
+:调度训练脚本 (GPU/云训练集群);
+:实时监控损失与准确率;
+if (指标达到预期?) then (是)
+  :导出模型权重+配置;
+  :运行验证集评估脚本;
+  if (评估通过?) then (是)
+    :注册模型版本 (Model Registry);
+    :部署到推理服务 (灰度/A-B);
+    :写入发布记录并通知业务;
+  else (否)
+    :记录失败原因并回滚;
+  endif
+else (否)
+  :记录失败原因并报警;
+endif
+
+stop
+@enduml

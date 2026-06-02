@@ -1,5 +1,6 @@
 from . import signals
 from .articles import Article, ArticlePicture, Banner, ArticleTag
+from .article_director import ArticleDirectorCallLog
 from .base import User, OAuthIdentity
 from .comments import CommentFr, CommentJp
 from .fr import WordlistFr, DefinitionFr, AttachmentFr, PronunciationTestFr

@@ -1,11 +1,26 @@
 import json
-from typing import List, Dict
+import hashlib
+import logging
+from datetime import datetime
+from typing import List, Dict, Any
 
 from openai import OpenAI
 from redis import Redis
+from starlette.requests import Request
+from dateutil.relativedelta import relativedelta
 
 from app.api.article_director.article_schemas import UserArticleRequest
+from app.models import User
+from app.models.article_director import ArticleDirectorCallLog
 from settings import settings
+
+EDUCHAT_BASE_URL = "https://chat.ecnu.edu.cn/open/api/v1"
+EDUCHAT_MODEL = "educhat-r1"
+EDUCHAT_TEMPERATURE = 0.8
+EDUCHAT_TOP_P = 0.9
+ARTICLE_DIRECTOR_RETENTION_MONTHS = 6
+ARTICLE_DIRECTOR_POLICY_VERSION = "article-director-log-v1"
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """
 # 背景
@@ -31,13 +46,13 @@ def chat_ecnu_request(
 ):
     client = OpenAI(
         api_key=settings.ECNU_TEACH_AI_KEY,
-        base_url="https://chat.ecnu.edu.cn/open/api/v1"
+        base_url=EDUCHAT_BASE_URL
     )
     completion = client.chat.completions.create(
-        model="educhat-r1",
+        model=EDUCHAT_MODEL,
         messages=session,
-        temperature=0.8,  # 保持创造性
-        top_p=0.9,  # 保持多样性
+        temperature=EDUCHAT_TEMPERATURE,  # 保持创造性
+        top_p=EDUCHAT_TOP_P,  # 保持多样性
     )
 
     return completion
@@ -70,6 +85,114 @@ async def save_session(redis_client: Redis, user_id: str, session: List[Dict[str
 async def reset_session(redis_client: Redis, user_id: str):
     """清空用户上下文"""
     await redis_client.delete(f"session:{user_id}")
+
+
+def text_sha256(text: str | None) -> str | None:
+    if text is None:
+        return None
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", maxsplit=1)[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client:
+        return request.client.host
+    return None
+
+
+def _safe_str(value: Any, max_length: int | None = None) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    if max_length is not None and len(text) > max_length:
+        return text[:max_length]
+    return text
+
+
+def _usage_value(usage: Any, field_name: str) -> int | None:
+    if usage is None:
+        return None
+    if isinstance(usage, dict):
+        return usage.get(field_name)
+    return getattr(usage, field_name, None)
+
+
+async def record_article_director_call(
+        *,
+        request: Request,
+        request_id: str,
+        user: User,
+        token_payload: Dict[str, Any],
+        action: str,
+        input_text: str,
+        status: str,
+        lang: str | None = None,
+        article_lang: str | None = None,
+        article_type: str | None = None,
+        theme: str | None = None,
+        output_text: str | None = None,
+        completion: Any = None,
+        latency_ms: int | None = None,
+        message_count: int = 0,
+        conversation_length_before: int = 0,
+        conversation_length_after: int | None = None,
+        error: Exception | None = None,
+) -> None:
+    usage = getattr(completion, "usage", None)
+    await ArticleDirectorCallLog.create(
+        request_id=request_id,
+        user=user,
+        login_type=token_payload.get("login_type"),
+        endpoint=str(request.url.path),
+        method=request.method,
+        client_ip=_client_ip(request),
+        user_agent=_safe_str(request.headers.get("user-agent"), 512),
+        action=action,
+        lang=lang,
+        article_lang=article_lang,
+        article_type=_safe_str(article_type, 60),
+        theme=_safe_str(theme, 255),
+        input_text=input_text,
+        input_hash=text_sha256(input_text),
+        input_length=len(input_text or ""),
+        output_text=output_text,
+        output_hash=text_sha256(output_text),
+        output_length=len(output_text) if output_text is not None else None,
+        provider="ECNU EduChat",
+        model=EDUCHAT_MODEL,
+        base_url=EDUCHAT_BASE_URL,
+        temperature=EDUCHAT_TEMPERATURE,
+        top_p=EDUCHAT_TOP_P,
+        system_prompt_hash=text_sha256(SYSTEM_PROMPT),
+        message_count=message_count,
+        conversation_length_before=conversation_length_before,
+        conversation_length_after=conversation_length_after,
+        upstream_request_id=_safe_str(getattr(completion, "id", None), 120),
+        prompt_tokens=_usage_value(usage, "prompt_tokens"),
+        completion_tokens=_usage_value(usage, "completion_tokens"),
+        total_tokens=_usage_value(usage, "total_tokens"),
+        latency_ms=latency_ms,
+        status=status,
+        error_code=_safe_str(type(error).__name__ if error else None, 120),
+        error_message=_safe_str(error, 2000),
+        risk_flags=[],
+        blocked=False,
+        policy_version=ARTICLE_DIRECTOR_POLICY_VERSION,
+        retention_months=ARTICLE_DIRECTOR_RETENTION_MONTHS,
+        expires_at=datetime.now() + relativedelta(months=ARTICLE_DIRECTOR_RETENTION_MONTHS),
+    )
+
+
+async def safe_record_article_director_call(**kwargs: Any) -> None:
+    try:
+        await record_article_director_call(**kwargs)
+    except Exception:
+        logger.exception("failed to record article director call log")
 
 async def reply_process(reply: str) -> str:
     """

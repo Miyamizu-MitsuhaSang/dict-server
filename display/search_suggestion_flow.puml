@@ -1,0 +1,49 @@
+@startuml
+!pragma useLayout legacy
+skinparam backgroundColor transparent
+skinparam defaultFontName "PingFang SC"
+skinparam defaultFontSize 14
+skinparam RankSep 50
+skinparam NodeSep 40
+skinparam shadowing false
+skinparam ArrowThickness 1
+
+title 联想候选生成流程
+
+start
+
+:用户输入 query + language;
+:标准化 query (trim/lowercase);
+
+if (language == "fr"?) then (是)
+  :根据输入类型选择策略;
+  if (拉丁字符输入?) then (是)
+    :WordlistFr 前缀+包含匹配;
+  else (否)
+    if (中文输入?) then (是)
+      :中文释义反查;
+    else (否)
+      :英文释义反查;
+    endif
+  endif
+else (否)
+  :language == "jp";
+  if (假名/日文汉字输入?) then (是)
+    :WordlistJp 前缀+包含匹配;
+  else (否)
+    :中文释义反查+汉字映射;
+  endif
+  :附带假名字段;
+endif
+
+:合并多来源结果;
+:按词条去重并合并释义/英文/假名;
+
+if (结果为空?) then (是)
+  :返回空 list;
+else (否)
+  :返回 list(word,hiragana,meanings,english);
+endif
+
+stop
+@enduml

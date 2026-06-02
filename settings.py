@@ -19,6 +19,7 @@ TORTOISE_ORM = {
                 'app.models.jp',
                 'app.models.comments',
                 'app.models.articles',
+                'app.models.article_director',
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',
@@ -41,6 +42,7 @@ ONLINE_SETTINGS = {
                 'app.models.jp',
                 'app.models.comments',
                 'app.models.articles',
+                'app.models.article_director',
                 'aerich.models'  # aerich自带模型类（必须填入）
             ],
             'default_connection': 'default',
@@ -55,6 +57,8 @@ ONLINE_SETTINGS = {
 class Settings(BaseSettings):
     USE_OAUTH: bool = False
 
+    WECHAT_OPEN_SECRET: str = ""
+    WECHAT_OPEN_APPID: str = ""
     WECHAT_MINIAPP_SECRET: str = ""
     WECHAT_MINI_APPID: str = ""
     WECHAT_REDIRECT_URI: str = ""

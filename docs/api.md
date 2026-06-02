@@ -1,1151 +1,1252 @@
-# FastAPI  
-版本：2.0  
-最后更新：2026-04-18
+# FastAPI 接口文档
+版本：2.1
+最后更新：2026-04-21
 
-**认证方式**  
-除特别说明外，接口均需要在 Header 中携带 `Authorization: Bearer <token>`。
+本文档按当前代码实际挂载的路由整理，基于 [main.py](/Users/godrictan/Desktop/ECNU/双创/小语种词典/dict_server/main.py) 与各 `app/api/*/routes.py` 文件生成。
 
-------
+## 基本说明
+
+### Base URL
+- 本地开发：`http://127.0.0.1:8000`
+- 线上前端当前使用：`https://lexiverse.com.cn/api`
+
+### 认证方式
+- 需要登录的接口，统一使用 Header：
+  `Authorization: Bearer <access_token>`
+- `refresh_token` 只能用于 `/users/refresh`，不能直接访问业务接口。
+
+### 当前公开接口
+以下接口当前代码允许匿名访问：
+- `GET /culture_share/banners`
+- `GET /culture_share/article/list`
+- `GET /culture_share/article/{article_id}`
+- `GET /culture_share/tags`
+- `POST /search/word`
+- `POST /search/list/word`
+- `POST /search/list/proverb`
+- `POST /search/proverb`
+- `POST /search/list/idiom`
+- `POST /search/idiom`
+- `GET /miniapp/home`
+- `GET /ping-redis`
+- `GET /search_time`
+- `GET /search/reset`
+
+### 当前管理员接口
+所有 `/admin/article/**` 接口都通过 [admin/router.py](/Users/godrictan/Desktop/ECNU/双创/小语种词典/dict_server/app/api/admin/router.py) 统一要求管理员权限。
+
+### 额外说明
+- `app/api/admin/dict.py` 中存在接口定义，但 **当前未在** [main.py](/Users/godrictan/Desktop/ECNU/双创/小语种词典/dict_server/main.py) **挂载**，不属于当前对外生效接口。
+- 本文档只描述“当前代码实际可访问”的接口，不保证线上已部署环境与本地代码完全同步。
+
+---
 
 ## User API
 
-### Register
-**Method**: `POST`  
-**Path**: `/users/register`
+### POST `/users/register`
+注册普通账号。
 
-#### 请求体
-| 字段      | 类型                                           | 必填 | 说明 |
-|-----------|------------------------------------------------|------|------|
-| username  | string                                         | 是   | 3-20 位，首字符需为字母/下划线，仅允许字母、数字、下划线且不能命中保留关键词 |
-| password  | string                                         | 是   | 6-20 位，至少包含 1 个数字，仅允许大小写字母、数字和常见特殊字符 |
-| email     | string                                         | 是   | 需要先通过 `/users/register/email_verify` 获取验证码 |
-| code      | string                                         | 是   | 邮箱验证码，5 分钟有效，验证成功后立即失效 |
-| phone     | string                                         | 否   | 中国大陆 11 位手机号，若不填则为 `null` |
-| lang_pref | string(enum: jp, fr, private，默认: private)   | 否   | 语言偏好，值必须是系统已存在的语言 code |
-| portrait  | string(默认: #)                                | 否   | 头像 URL |
-
-#### 响应
-**200 成功**  
-| 字段         | 类型   | 说明 |
-|--------------|--------|------|
-| id           | int    | 新用户 ID |
-| message      | string | 固定为 `register success` |
-| access_token | string | JWT 访问令牌，20 小时有效 |
-| token_type   | string | 固定为 `bearer` |
-
-**400 业务错误**  
-`用户名为保留关键词，请更换`、`用户名长度必须在3到20个字符之间`、`密码...`、`验证码错误或已过期`、`用户名已经被占用` 等。
-
-**422 验证错误**  
-返回 `HTTPValidationError`
-
----
-
-### Request Email Verification Code
-**Method**: `POST`  
-**Path**: `/users/register/email_verify`
-
-#### 请求体
-| 字段  | 类型   | 必填 | 说明          |
-|-------|--------|------|---------------|
-| email | string | 是   | 未注册过的邮箱 |
-
-#### 响应
-- **200**：`{"message": "验证码已发送"}`  
-- **400**：邮箱已被使用
-
----
-
-### Login
-**Method**: `POST`  
-**Path**: `/users/login`
-
-#### 请求体
-| 字段    | 类型   | 必填 | 说明     |
-|---------|--------|------|----------|
-| name    | string | 是   | 用户名   |
-| password| string | 是   | 登录密码 |
-
-#### 响应
-**200 成功**：返回：
-- `access_token`：JWT 访问令牌，当前仍保持 **20 小时**有效
-- `refresh_token`：刷新令牌，默认 **30 天**有效
-- `token_type`：固定为 `bearer`
-- `expires_in`：`access_token` 有效秒数（当前为 `72000`）
-- `refresh_expires_in`：`refresh_token` 有效秒数（当前为 `2592000`）
-- `user`：`{id, username, is_admin, lang_pref, portrait, login_type}`
-- `is_new_user`：固定为 `false`
-**404**：用户不存在  
-**400**：用户名或密码错误
-
----
-
-### Refresh Session
-**Method**: `POST`  
-**Path**: `/users/refresh`
-
-#### 请求体
-| 字段          | 类型   | 必填 | 说明 |
-|---------------|--------|------|------|
-| refresh_token | string | 是   | 登录成功后返回的刷新令牌 |
-
-#### 响应
-**200 成功**：返回一组新的 `access_token`、`refresh_token`、`token_type`、`expires_in`、`refresh_expires_in`，并附带当前用户信息 `user`。  
-**401**：`refresh token 已过期`、`无效的 refresh token`、`refresh token 已失效`
-
-#### 说明
-- 刷新成功后，旧的 `refresh_token` 会立刻失效（轮换机制）。
-- 本次升级 **未缩短** 现有 `access_token` 的 20 小时有效期，网页前端可平滑升级。
-
----
-
-### Current User
-**Method**: `GET`  
-**Path**: `/users/me`  
-需要认证
-
-#### 响应
-**200 成功**：`{id, username, is_admin, lang_pref, portrait, login_type}`  
-**401**：未携带有效 Bearer Token，或传入了 `refresh_token`
-
----
-
-### WeChat Login Redirect
-**Method**: `GET`  
-**Path**: `/users/auth/wechat/login`
-
-#### 说明
-- 用于网站扫码登录。
-- 服务端会生成防 CSRF 的 `state`，写入 Redis，并重定向到微信开放平台授权页。
-- 依赖环境变量：`WECHAT_MINI_APPID`、`WECHAT_MINIAPP_SECRET`、`WECHAT_REDIRECT_URI`。
-
-#### 响应
-- **307**：重定向到微信扫码授权页  
-- **500**：微信登录配置缺失
-
----
-
-### WeChat Login Callback
-**Method**: `GET`  
-**Path**: `/users/auth/wechat/callback`
-
-#### Query
-| 参数  | 类型   | 必填 | 说明 |
-|-------|--------|------|------|
-| code  | string | 是   | 微信授权成功后返回的 code |
-| state | string | 是   | 登录发起时生成的 state，用于防 CSRF |
-
-#### 说明
-- 服务端会校验 `state`，然后用 `code` 换取 `openid/access_token`。
-- 若站内不存在对应微信身份，则自动创建一个本地账号：
-  使用 `wx_随机串` 作为用户名、`wechat_<openid>@wx.local` 形式的占位邮箱、随机密码哈希，默认语言为 `private`。
-- 最终仍返回与普通登录一致的站内 JWT，可直接访问现有受保护接口。
-- 若配置了 `WECHAT_CALLBACK_SUCCESS_URL`，则成功后会重定向到前端地址并附带 `token`；若配置了 `WECHAT_CALLBACK_FAILURE_URL`，失败时会重定向并附带 `error`。
-
-#### 响应
-**200 成功**：未配置前端跳转地址时，返回：
-- `access_token`
-- `refresh_token`
-- `token_type`
-- `expires_in`
-- `refresh_expires_in`
-- `user`: `{id, username, is_admin, lang_pref, portrait, login_type}`
-- `is_new_user`
-
-**307**：若配置了前端回跳地址，则重定向回前端  
-**400**：`state` 无效、已过期，或微信返回错误  
-**500**：微信登录配置缺失
-
----
-
-### WeChat Mini Program Login
-**Method**: `POST`  
-**Path**: `/users/auth/wechat/mini/login`
-
-#### 请求体
-| 字段 | 类型   | 必填 | 说明 |
-|------|--------|------|------|
-| code | string | 是   | 小程序端 `wx.login()` 返回的临时登录凭证 |
-
-#### 说明
-- 服务端调用微信 `jscode2session` 换取 `openid/session_key/unionid`。
-- 若同一微信体系下已有 `unionid` 对应账号，会自动复用原站内用户，避免 Web 扫码登录与小程序登录产生重复账号。
-- 依赖环境变量：`WECHAT_MINI_APPID`、`WECHAT_MINIAPP_SECRET`。
-
-#### 响应
-**200 成功**：返回：
-- `access_token`
-- `refresh_token`
-- `token_type`
-- `expires_in`
-- `refresh_expires_in`
-- `user`: `{id, username, is_admin, lang_pref, portrait, login_type}`
-- `is_new_user`：是否首次为该微信身份创建站内用户
-
-**400**：微信返回错误或 `code` 无效  
-**500**：小程序微信配置缺失
-
----
-
-### Logout
-**Method**: `POST`  
-**Path**: `/users/logout`  
-需要认证
-
-#### 请求体
-| 字段          | 类型   | 必填 | 说明 |
-|---------------|--------|------|------|
-| refresh_token | string | 否   | 若传入，将同时撤销这组 refresh 会话 |
-
-#### 响应
-- **200**：`{"message": "logout ok"}`  
-- **401**：未携带有效的 Bearer Token
-
----
-
-### Update Profile
-**Method**: `PUT`  
-**Path**: `/users/update`  
-需要认证
-
-#### 请求体
-| 字段             | 类型                                  | 必填 | 说明 |
-|------------------|---------------------------------------|------|------|
-| current_password | string                                | 是   | 用于确认身份 |
-| new_username     | string                                | 否   | 新用户名，需遵守注册规则且不能为保留词 |
-| new_password     | string                                | 否   | 新密码，需遵守注册规则 |
-| new_language     | string(enum: jp, fr, private，默认: private) | 否 | 新语言偏好 |
-
-#### 响应
-- **200**：修改成功（无返回体）  
-- **400**：原密码错误或新用户名为保留关键词  
-- **422**：字段校验失败
-
----
-
-### Forgot Password (Phone) — Deprecated
-**Method**: `POST`  
-**Path**: `/users/auth/forget-password/phone`
-
-#### 请求体
-| 字段        | 类型 | 必填 | 说明 |
-|-------------|------|------|------|
-| phone_number| string | 是 | 中国大陆手机号 |
-
-返回 `{"message": "验证码已发送"}`。若手机号不存在，则 404。
-
----
-
-### Verify Phone Code — Deprecated
-**Method**: `POST`  
-**Path**: `/users/auth/varify_code`
-
-#### 请求体
-| 字段 | 类型   | 必填 | 说明   |
-|------|--------|------|--------|
-| code | string | 是   | 验证码 |
-| phone| string | 是   | 手机号 |
-
-#### 响应
-- **200**：`{"message": "验证成功，可以重置密码"}`  
-- **400**：验证码错误或过期
-
----
-
-### Forgot Password (Email)
-**Method**: `POST`  
-**Path**: `/users/auth/forget-password/email`
-
-#### 请求体
-| 字段  | 类型   | 必填 | 说明 |
-|-------|--------|------|------|
-| email | string | 是   | 已注册邮箱 |
-
-#### 响应
-- **200**：验证码发送成功  
-- **404**：邮箱未注册
-
----
-
-### Verify Email Reset Code
-**Method**: `POST`  
-**Path**: `/users/auth/varify_code/email`
-
-#### 请求体
-| 字段  | 类型   | 必填 | 说明   |
-|-------|--------|------|--------|
-| email | string | 是   | 邮箱地址 |
-| code  | string | 是   | 邮箱验证码 |
-
-#### 响应
-- **200**：`{"reset_token": "<token>"}`（后续重置密码需要将该 token 放在 `X-Reset-Token` 头部）  
-- **400**：验证码错误或已过期
-
----
-
-### Reset Password
-**Method**: `POST`  
-**Path**: `/users/auth/reset-password`
-
-#### Headers
-| 名称          | 说明                            |
-|---------------|---------------------------------|
-| X-Reset-Token | `/users/auth/varify_code/email` 返回的 token |
-
-#### 请求体
-| 字段    | 类型   | 必填 | 说明                   |
-|---------|--------|------|------------------------|
-| password| string | 是   | 新密码（与注册规则一致） |
-
-#### 响应
-- **200**：`{"massage": "密码重置成功"}`  
-- **400**：密码不符合规则或者 token 无效
-
-------
-
-## Admin Dictionary API
-所有接口都需要管理员身份（`is_admin_user` 依赖）。
-
-### List Dictionary Entries
-**Method**: `GET`  
-**Path**: `/admin/dict`
-
-#### Query
-| 参数      | 类型                    | 默认 | 说明                           |
-|-----------|-------------------------|------|--------------------------------|
-| page      | integer (>=1)           | 1    | 页码                            |
-| page_size | integer (<=10)          | 10   | 每页条数                        |
-| lang_code | string(enum: fr, jp)    | fr   | 选择法语或日语词典数据          |
-
-#### 响应
-`{"total": <总数>, "data": [ ...词条... ]}`
-
----
-
-### Search Word (Admin)
-**Method**: `POST`  
-**Path**: `/admin/dict/search_word`
-
-#### 请求体
-`SearchWordRequest`：`word`、`language`(fr/jp)、可选 `pos`。  
-#### 响应
-匹配到的定义数组；若单词不存在则 400。
-
----
-
-### Batch Adjust Definitions
-**Method**: `PUT`  
-**Path**: `/admin/dict/adjust`
-
-#### 请求体
-`UpdateWordSet`（包含若干 `UpdateWord`，字段 `id`, `word`, `language`, 以及需要修改的定义字段）。  
-
-#### 响应
-返回 `success_count`、`fail_count` 与失败详情。  
-422 表示没有任何改动；400/404 表示部分更新失败。
-
----
-
-### Add Definition
-**Method**: `POST`  
-**Path**: `/admin/dict/add`
-
-#### 请求体
-`CreateWord`：`word`、`language`、`pos`、`meaning`、`example`、`eng_explanation`（法语必填、日语不可填）。  
-
-#### 响应
-- **200**：创建成功  
-- **409**：释义已存在  
-- **400**：不支持的语言
-
----
-
-### Import via Excel
-**Method**: `POST`  
-**Path**: `/admin/dict/update_by_xlsx`
-
-#### 请求体
-| 字段 | 类型      | 必填 | 说明                        |
-|------|-----------|------|-----------------------------|
-| file | UploadFile| 是   | `.xlsx` / `.xls` 文件       |
-
-#### 响应
-- **200**：`{"message": "导入成功"}`  
-- **400**：文件格式错误  
-- **500**：导入失败（返回具体原因）
-
-------
-
-## Culture Share API
-前缀：`/culture_share`。  
-`/culture_share/banners` 默认无需认证；其余文章相关接口需要登录认证。
-
-------
-
-## Miniapp API
-前缀：`/miniapp`。  
-面向微信小程序首页的聚合接口，默认无需认证。
-
-### Miniapp Home
-**Method**: `GET`  
-**Path**: `/miniapp/home`
-
-#### 响应
-`{`
-`  "banners": [{id, title, subtitle, image_url, target_url, sort_order, is_active, start_at, end_at}, ...],`
-`  "hot_tags": [{tag_id, name, usage_count}, ...],`
-`  "featured_articles": [{article_id, title, summary, source, cover_url, category, tags, publish_at, created_at}, ...],`
-`  "quick_entries": [{key, title, subtitle, target_page}, ...]`
-`}`
-
-#### 说明
-- `banners` 复用现有轮播逻辑；
-- `hot_tags` 与 `featured_articles` 直接从文化分享模块聚合；
-- `quick_entries` 为小程序首页快捷入口配置，便于前端减少硬编码。
-
-### Home Banners
-**Method**: `GET`  
-**Path**: `/culture_share/banners`
-
-#### Query
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| limit | integer(2-5) | 4 | 轮播展示数量 |
-
-#### 响应
-`{"article_cnt": <数量>, "article_list": [{id, title, subtitle, image_url, target_url, sort_order, is_active, start_at, end_at}, ...]}`
-
----
-
-### Popular Tags
-**Method**: `GET`  
-**Path**: `/culture_share/tags`
-需要认证
-
-#### Query
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| limit | integer(1-100) | 10 | 返回前 N 个高频 tags |
-
-#### 响应
-`{"total": <总数>, "items": [{"tag_id", "name", "usage_count"}, ...]}`
-
-按 `usage_count`（被多少篇文章使用）降序返回。
-
----
-
-### Article List
-**Method**: `GET`  
-**Path**: `/culture_share/article/list`
-需要认证
-
-#### Query
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| page | integer(>=1) | 1 | 页码 |
-| page_size | integer(1-50) | 10 | 每页条数 |
-| category | string | - | 分类精确筛选 |
-| keyword | string | - | 标题模糊搜索 |
-
-#### 响应
-`{"page": 1, "page_size": 10, "total": 123, "items": [{article_id, title, summary, source, cover_url, category, tags, publish_at, created_at}, ...]}`
-
-仅返回 `published` 且 `publish_at <= 当前时间`（或 `publish_at` 为空）的文章。
-
----
-
-### Article Detail
-**Method**: `GET`  
-**Path**: `/culture_share/article/{article_id}`
-需要认证
-
-#### 响应
-- **200**：`{article_id, title, summary, source, cover_url, content_html, content_text, category, tags, publish_at, created_at, updated_at}`  
-- **404**：文章不存在或未发布
-
-#### 访问规则
-- 普通用户：仅可查看已发布且在发布时间内的文章。
-- 管理员用户：可预览任意状态文章（包括草稿/未到发布时间）。
-
-------
-
-## Admin Article API
-前缀：`/admin/article`，需管理员认证。
-
-### Create Article
-**Method**: `POST`  
-**Path**: `/admin/article/create_article`
-
-#### 请求体
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| title | string | 是 | 标题 |
-| summary | string | 否 | 摘要 |
-| source | string | 否 | 文章来源/出处 |
-| cover_url | string | 否 | 封面 URL（也可后续通过上传接口覆盖） |
-| content_html | string | 是 | 富文本正文 |
-| content_text | string | 否 | 纯文本正文，不传则后端从 `content_html` 提取 |
-| tags | string[] | 否 | 标签数组（自动去重清洗并同步到 `article_tags`） |
-| category | string | 否 | 分类 |
-| status | enum(`draft`/`published`) | 否 | 默认 `draft` |
-| publish_at | datetime | 否 | 发布时间，`status=published` 且不传时自动补当前时间 |
-
-#### 响应
-`{"message": "文章创建成功", "article_id": "<id>"}`
-
-#### 与临时图片上传联动
-- 若 `cover_url` 或 `content_html` 中使用了 `/media/article/temp/...` 临时地址，保存时后端会自动：
-- 将对应文件移动到正式目录 `/media/article/content/YYYYMM/`
-- 把正文中的临时 URL 替换为正式 URL
-- 同步写入 `article_pics`（`is_cover=false`），封面地址也会更新为正式地址
-
----
-
-### Update Article (Edit & Save)
-**Method**: `PUT`  
-**Path**: `/admin/article/{article_id}`
-
-#### 请求体
-与创建文章一致，当前实现为“全量更新”：
+请求体：
 
 | 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| title | string | 是 | 标题 |
-| summary | string | 否 | 摘要 |
-| source | string | 否 | 文章来源/出处 |
-| cover_url | string | 否 | 封面 URL；传空会覆盖当前值 |
-| content_html | string | 是 | 富文本正文 |
-| content_text | string | 否 | 纯文本正文，不传则后端从 `content_html` 提取 |
-| tags | string[] | 否 | 标签数组（自动去重清洗并同步到 `article_tags`） |
-| category | string | 否 | 分类 |
-| status | enum(`draft`/`published`) | 是 | 文章状态 |
-| publish_at | datetime | 否 | 发布时间 |
+|---|---|---:|---|
+| `username` | string | 是 | 3-20 位，首字符需为字母或下划线，仅允许字母、数字、下划线 |
+| `password` | string | 是 | 6-20 位，至少包含 1 个数字 |
+| `email` | string | 是 | 注册邮箱 |
+| `code` | string | 是 | 通过 `/users/register/email_verify` 获取的邮箱验证码 |
+| `phone` | string | 是 | 中国大陆手机号，注册必填 |
+| `phone_code` | string | 是 | 通过 `/users/register/phone_verify` 获取的短信验证码 |
+| `lang_pref` | `jp \| fr \| private` | 否 | 默认 `private` |
+| `portrait` | string | 否 | 默认 `#` |
 
-#### 保存逻辑（后端自动处理）
-- 当 `status=published` 且 `publish_at` 未传时：
-  如果文章已有发布时间则沿用，否则自动补当前时间。
-- `tags` 会自动 `strip + 去重`，并写入 `article_tags` 表。
-- 正文会先进行 HTML 清洗，再存储。
-- 若 `cover_url` 或 `content_html` 中包含 `/media/article/temp/...`，会在保存时自动转正为 `/media/article/content/...` 并落库。
-
-#### 响应
-- **200**：`{"message": "文章更新成功", "article_id": "<id>"}`
-- **404**：文章不存在
-
----
-
-### Get Article List
-**Method**: `GET`  
-**Path**: `/admin/article`
-
-#### Query
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| page | integer(>=1) | 1 | 页码 |
-| page_size | integer(1-100) | 10 | 每页条数 |
-| status | string | - | 状态筛选 |
-| category | string | - | 分类筛选 |
-| keyword | string | - | 标题模糊搜索 |
-
-#### 响应
-`{"items": [{article_id, title, summary, source, cover_url, category, tags, status, publish_at, created_at, updated_at}, ...], "total": <总数>}`
-
----
-
-### Get Article Detail
-**Method**: `GET`  
-**Path**: `/admin/article/{article_id}`
-
-#### 响应
-- **200**：`{article_id, title, summary, source, cover_url, content_html, content_text, category, tags, status, publish_at, created_at, updated_at}`  
-- **404**：文章不存在
-
----
-
-### Get Published Status
-**Method**: `GET`  
-**Path**: `/admin/article/{article_id}/published`
-
-#### 响应
-- **200**：`{"article_id": "<id>", "status": "draft|published", "is_published": <bool>, "publish_at": "<datetime|null>"}`  
-- **404**：文章不存在
-
----
-
-### Get Banner Status
-**Method**: `GET`  
-**Path**: `/admin/article/{article_id}/banner`
-
-#### 响应
-- **200**：`{"article_id": "<id>", "has_banner": <bool>, "enabled": <bool>, "banner_id": <int|null>, "sort_order": <int|null>, "start_at": "<datetime|null>", "end_at": "<datetime|null>"}`  
-- **404**：文章不存在
-
----
-
-### Publish Article
-**Method**: `POST`  
-**Path**: `/admin/article/{article_id}/publish`
-
-#### 响应
-`{"message": "文章发布成功", "article_id": "<id>"}`
-
-> 该功能可由 `Update Article` 复用：将 `status` 设为 `published` 即可达到发布效果。  
-> 保留本接口是为了在“只切换发布状态”时调用更轻量。
-
----
-
-### Unpublish Article
-**Method**: `POST`  
-**Path**: `/admin/article/{article_id}/unpublish`
-
-#### 响应
-`{"message": "文章已撤回为草稿", "article_id": "<id>"}`
-
-> 该功能同样可由 `Update Article` 复用：将 `status` 设为 `draft` 即可。
-
----
-
-### Delete Article
-**Method**: `DELETE`  
-**Path**: `/admin/article/{article_id}`
-
-#### 响应
-- **200**：`{"message": "文章删除成功", "article_id": "<id>"}`
-- **404**：文章不存在
-
-#### 删除行为
-- 删除 `articles` 文章记录
-- 删除该文章关联的 `article_pics` 记录及对应本地图片文件
-- 删除该文章关联的 `banner` 记录
-- 清理首页轮播缓存
-
----
-
-### Switch Banner
-**Method**: `POST`  
-**Path**: `/admin/article/{article_id}/banner/switch`
-
-#### 请求体
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| enabled | bool | 是 | `true` 开启轮播，`false` 关闭轮播 |
-| title | string | 否 | 轮播标题，不传默认文章标题 |
-| subtitle | string | 否 | 轮播副标题，不传默认文章摘要 |
-| image_url | string | 否 | 轮播图地址，不传默认文章 `cover_url`；若仍为空则由前端兜底默认图 |
-| target_url | string | 否 | 点击跳转地址，不传默认 `/culture_share/article/{article_id}` |
-| sort_order | integer | 否 | 排序值，默认 `0` |
-| start_at | datetime | 否 | 生效开始时间 |
-| end_at | datetime | 否 | 生效结束时间 |
-
-#### 响应
-`{"message": "轮播已开启/轮播已关闭", "article_id": "<id>", "banner_id": <id|null>, "enabled": <bool>}`
-
-#### 约束
-- 同时激活的轮播最多 4 个。  
-- 当调用开启轮播（`enabled=true`）且当前已激活轮播数达到 4 个时，接口返回 400：  
-`当前已存在4个轮播，请先取消其他文章的轮播后再开启`
-
----
-
-### Upload Cover Image
-**Method**: `POST`  
-**Path**: `/admin/article/{article_id}/cover/upload`
-
-#### 请求体
-`multipart/form-data`
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| file | UploadFile | 是 | 封面图片文件，支持 `jpg/jpeg/png/webp/gif` |
-
-#### 响应
-`{"message": "封面上传成功", "article_id": "<id>", "cover_url": "/media/article/covers/YYYYMM/cover_<articleid>_<timestamp>_<rand>.<ext>", "pic_id": "<pic_id>"}`  
-同时会更新：
-- `articles.cover_url`（可直接给前端展示）
-- `article_pics` 中该文章 `is_cover=true` 的记录（不存在则创建，存在则覆盖）
-
-#### 存储规则
-- 目录：`<项目根目录>/media/article/covers/YYYYMM/`
-- 文件名：`cover_{article_id去掉-}_{yyyyMMddHHmmss}_{8位随机串}.{ext}`
-
----
-
-### Upload Temp Content Images (Recommended Before Create)
-**Method**: `POST`  
-**Path**: `/admin/article/upload-temp-images`
-
-#### 请求体
-`multipart/form-data`
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| files | UploadFile[] | 是 | 正文图片文件数组（同名字段可传多次），支持 `jpg/jpeg/png/webp/gif` |
-
-#### 响应
-`{"message": "临时图片上传成功", "images": [{"image_url": "/media/article/temp/YYYYMM/temp_<timestamp>_<index>_<rand>.<ext>"}, ...]}`
-
-#### 适用流程
-1. 前端先调本接口拿到临时 URL。  
-2. 将 URL 插入编辑器正文（必要时也可先作为 `cover_url`）。  
-3. 调 `Create Article` 或 `Update Article` 保存。  
-4. 后端自动将临时图转正并替换正文 URL，无需提前知道 `article_id`。
-
-#### 存储规则
-- 临时目录：`<项目根目录>/media/article/temp/YYYYMM/`
-- 文件名：`temp_{yyyyMMddHHmmss}_{index}_{8位随机串}.{ext}`
-
----
-
-### Delete Temp Content Images
-**Method**: `DELETE`  
-**Path**: `/admin/article/upload-temp-images`
-
-#### 请求体
-`application/json`
+成功响应：
 
 ```json
 {
-  "image_urls": [
-    "/media/article/temp/202603/temp_20260312120000_0_ab12cd34.png",
-    "/media/article/temp/202603/temp_20260312120000_1_ef56gh78.jpg"
+  "id": 1,
+  "message": "register success",
+  "access_token": "jwt",
+  "token_type": "bearer"
+}
+```
+
+常见错误：
+- `400`：邮箱/短信验证码错误或过期、邮箱已注册、手机号已注册、用户名/密码不合法
+- `422`：请求体校验失败
+
+---
+
+### POST `/users/register/email_verify`
+发送注册验证码。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `email` | string | 是 | 未注册邮箱 |
+
+成功响应：
+
+```json
+{ "message": "验证码已发送" }
+```
+
+---
+
+### POST `/users/register/phone_verify`
+发送注册短信验证码。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `phone_number` | string | 是 | 未注册的中国大陆手机号 |
+
+成功响应：
+
+```json
+{ "message": "验证码已发送" }
+```
+
+---
+
+### POST `/users/login`
+用户名密码登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `name` | string | 是 |
+| `password` | string | 是 |
+
+成功响应：
+
+```json
+{
+  "access_token": "jwt",
+  "refresh_token": "jwt",
+  "token_type": "bearer",
+  "expires_in": 72000,
+  "refresh_expires_in": 2592000,
+  "user": {
+    "id": 1,
+    "username": "alice",
+    "is_admin": false,
+    "lang_pref": "fr",
+    "portrait": "#",
+    "login_type": "password"
+  },
+  "is_new_user": false
+}
+```
+
+常见错误：
+- `404`：用户不存在
+- `400`：用户名或密码错误
+
+---
+
+### POST `/users/refresh`
+刷新会话，返回新的 access/refresh token 对。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `refresh_token` | string | 是 |
+
+成功响应结构与 `/users/login` 一致。
+
+常见错误：
+- `401`：`refresh token 已过期`、`无效的 refresh token`、`refresh token 已失效`
+
+---
+
+### GET `/users/me`
+获取当前用户信息。
+需要登录。
+
+成功响应：
+
+```json
+{
+  "id": 1,
+  "username": "alice",
+  "is_admin": false,
+  "lang_pref": "fr",
+  "portrait": "#",
+  "login_type": "password"
+}
+```
+
+---
+
+### POST `/users/logout`
+退出登录。
+需要登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `refresh_token` | string | 否 | 若传入，则同时废弃该 refresh 会话 |
+
+成功响应：
+
+```json
+{ "message": "logout ok" }
+```
+
+---
+
+### PUT `/users/update`
+修改当前用户资料。
+需要登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `current_password` | string | 是 | 当前密码 |
+| `new_username` | string | 否 | 新用户名 |
+| `new_password` | string | 否 | 新密码 |
+| `new_language` | `jp \| fr \| private` | 否 | 新语言偏好 |
+
+成功响应：
+
+```json
+{
+  "message": "用户信息更新成功",
+  "user": {
+    "id": 1,
+    "username": "alice",
+    "is_admin": false,
+    "lang_pref": "fr",
+    "portrait": "#",
+    "login_type": null
+  }
+}
+```
+
+常见错误：
+- `400`：缺少当前密码、原密码错误、用户名冲突、密码不合法
+
+---
+
+### POST `/users/auth/forget-password/email`
+发送邮箱找回密码验证码。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `email` | string | 是 |
+
+成功响应：
+
+```json
+{ "message": "验证码已发送" }
+```
+
+常见错误：
+- `404`：用户不存在
+
+---
+
+### POST `/users/auth/varify_code/email`
+验证邮箱验证码，换取重置密码令牌。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `email` | string | 是 |
+| `code` | string | 是 |
+
+成功响应：
+
+```json
+{ "reset_token": "token" }
+```
+
+---
+
+### POST `/users/auth/reset-password`
+使用 `x-reset-token` 重置密码。
+
+Header：
+
+| 字段 | 必填 | 说明 |
+|---|---:|---|
+| `x-reset-token` | 是 | 由 `/users/auth/varify_code/email` 返回 |
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `password` | string | 是 |
+
+成功响应：
+
+```json
+{ "message": "密码重置成功" }
+```
+
+---
+
+### GET `/users/auth/wechat/login`
+发起网页微信扫码登录。
+
+成功行为：
+- `307`：重定向到微信授权页
+
+常见错误：
+- `500`：微信配置缺失
+
+---
+
+### GET `/users/auth/wechat/callback`
+网页微信扫码回调。
+
+Query：
+
+| 参数 | 类型 | 必填 |
+|---|---|---:|
+| `code` | string | 是 |
+| `state` | string | 是 |
+
+成功行为：
+- 若微信已绑定站内账号：返回与 `/users/login` 相同结构的登录结果
+- 若微信尚未绑定站内账号：返回
+
+```json
+{
+  "status": "need_phone",
+  "bind_ticket": "ticket",
+  "login_type": "wechat_open",
+  "message": "该微信尚未绑定站内账号，请先完成手机号短信验证，系统将自动匹配或创建账号",
+  "wechat_profile": {
+    "nickname": "xxx"
+  }
+}
+```
+
+- 若配置了前端回跳地址：`307` 重定向回前端；已绑定时附带 `token`，未绑定时附带 `status=need_phone` 和 `bind_ticket`
+
+---
+
+### POST `/users/auth/wechat/bind/start`
+已登录用户发起网页微信绑定。
+
+需要登录。
+
+成功响应：
+
+```json
+{
+  "authorize_url": "https://open.weixin.qq.com/...",
+  "message": "请跳转到微信授权页完成绑定"
+}
+```
+
+说明：
+- 前端拿到 `authorize_url` 后跳转即可。
+- 绑定完成后，微信会回调 `/users/auth/wechat/callback`。
+- 若配置了 `WECHAT_CALLBACK_SUCCESS_URL`，回跳时会附带 `status=bound`。
+
+---
+
+### POST `/users/auth/wechat/bind/existing`
+将一个尚未绑定的微信身份绑定到已有账号。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `bind_ticket` | string | 是 | 来自未绑定微信登录返回 |
+| `username` | string | 是 | 原有站内账号用户名 |
+| `password` | string | 是 | 原有站内账号密码 |
+
+成功响应：
+- 返回与 `/users/login` 相同结构的登录结果
+
+常见错误：
+- `400`：`bind_ticket` 无效或过期、用户名或密码错误
+- `404`：用户不存在
+- `409`：该微信已绑定其他用户，或当前账号已绑定其他微信身份
+
+---
+
+### POST `/users/auth/wechat/phone_verify`
+给微信登录流程发送短信验证码。
+
+Query：
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `bind_ticket` | string | 是 | 来自微信登录未绑定返回 |
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `phone_number` | string | 是 |
+
+成功响应：
+
+```json
+{ "message": "验证码已发送" }
+```
+
+说明：
+- 该接口不会区分手机号是否已注册。
+- 后续在 `/users/auth/wechat/complete_by_phone` 中由系统自动判断：
+  已有账号则绑定并登录；没有账号则自动创建新账号并绑定微信。
+
+---
+
+### POST `/users/auth/wechat/complete_by_phone`
+通过手机号短信验证码完成微信登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `bind_ticket` | string | 是 | 来自微信登录未绑定返回 |
+| `phone_number` | string | 是 | 中国大陆手机号 |
+| `code` | string | 是 | 通过 `/users/auth/wechat/phone_verify` 获取的短信验证码 |
+
+成功行为：
+- 若手机号已对应站内账号：绑定该微信并返回登录结果
+- 若手机号尚未注册：自动创建一个新账号，绑定微信并返回登录结果，返回中的 `is_new_user=true`
+
+说明：
+- 自动创建的新账号会生成系统用户名、随机密码哈希和占位邮箱，后续可在资料页补全。
+
+---
+
+### POST `/users/auth/wechat/mini/login`
+微信小程序登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `code` | string | 是 |
+
+成功行为：
+- 若微信已绑定站内账号：返回与 `/users/login` 相同结构的登录结果，`user.login_type` 为 `wechat_miniapp`
+- 若当前请求已携带站内登录态，且该微信尚未绑定：会直接绑定到当前登录账号，然后返回新的登录结果
+- 若微信尚未绑定且当前未登录：返回 `status=need_phone + bind_ticket`
+
+---
+
+### POST `/users/auth/wechat/app/login`
+移动应用端微信登录。
+
+请求体：
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `code` | string | 是 |
+
+成功行为：
+- 若微信已绑定站内账号：返回与 `/users/login` 相同结构的登录结果，`user.login_type` 为 `wechat_app`
+- 若当前请求已携带站内登录态，且该微信尚未绑定：会直接绑定到当前登录账号，然后返回新的登录结果
+- 若微信尚未绑定且当前未登录：返回 `status=need_phone + bind_ticket`
+
+说明：
+- 网页版、miniapp、移动应用端共用同一套后端判定逻辑：
+  已绑定直接登录，未绑定返回 `bind_ticket`，已登录态下可直接绑定当前账号
+- 若用户未登录且微信未绑定，统一先走手机号短信验证：
+  有老账号则按手机号匹配并绑定，没有老账号则自动创建新账号并绑定
+
+---
+
+### Deprecated
+以下接口已标记弃用，且当前实现存在兼容性风险，不建议继续接入：
+
+#### POST `/users/auth/forget-password/phone`
+手机找回密码入口，代码仍挂载但实现使用了旧字段，当前不建议使用。
+
+#### POST `/users/auth/varify_code`
+手机验证码校验接口，代码仍挂载但依赖旧实现，当前不建议使用。
+
+---
+
+## Culture Share API
+
+### GET `/culture_share/banners`
+公开接口。获取首页轮播。
+
+Query：
+
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `limit` | int | 否 | `4` |
+
+成功响应：
+
+```json
+{
+  "article_cnt": 4,
+  "article_list": [
+    {
+      "id": 1,
+      "title": "标题",
+      "subtitle": "副标题",
+      "image_url": "/media/xx.png",
+      "target_url": "/culture_share/article/xxx",
+      "sort_order": 0,
+      "is_active": true,
+      "start_at": null,
+      "end_at": null
+    }
   ]
 }
 ```
 
-#### 响应
-`{"message": "临时图片删除完成", "deleted_urls": [...], "skipped_urls": [...]}`
+---
 
-#### 说明
-- 仅允许删除临时目录 `/media/article/temp/` 下的文件。
-- 不在临时目录、文件不存在或路径非法的 URL 会进入 `skipped_urls`。
-- 该接口只删除临时文件，不影响已经转正到 `/media/article/content/...` 的图片。
+### GET `/culture_share/article/list`
+公开接口。获取已发布文章分页列表。
+
+Query：
+
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `page` | int | 否 | `1` |
+| `page_size` | int | 否 | `10` |
+| `category` | string | 否 | - |
+| `keyword` | string | 否 | - |
+
+成功响应：
+
+```json
+{
+  "page": 1,
+  "page_size": 10,
+  "total": 12,
+  "items": [
+    {
+      "article_id": "art_xxx",
+      "title": "标题",
+      "summary": "摘要",
+      "source": "LEXIVERSE",
+      "cover_url": "/media/cover.png",
+      "category": "culture",
+      "tags": ["tag1", "tag2"],
+      "publish_at": "2026-04-21T12:00:00",
+      "created_at": "2026-04-20T12:00:00"
+    }
+  ]
+}
+```
 
 ---
 
-### Upload Content Images
-**Method**: `POST`  
-**Path**: `/admin/article/{article_id}/content-images/upload`
+### GET `/culture_share/article/{article_id}`
+文章详情。
 
-#### 请求体
-`multipart/form-data`
+权限规则：
+- 匿名用户：只能查看已发布文章
+- 管理员：可预览未发布文章
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| files | UploadFile[] | 是 | 正文图片文件数组（同名字段可传多次），支持 `jpg/jpeg/png/webp/gif` |
+成功响应：
 
-#### 响应
-`{"message": "正文图片上传成功", "article_id": "<id>", "images": [{"pic_id": "...", "image_url": "/media/article/content/YYYYMM/content_<...>.png", "sequence": 1}, ...]}`
+```json
+{
+  "article_id": "art_xxx",
+  "title": "标题",
+  "summary": "摘要",
+  "source": "LEXIVERSE",
+  "cover_url": "/media/cover.png",
+  "content_html": "<p>...</p>",
+  "content_text": "纯文本内容",
+  "category": "culture",
+  "tags": ["tag1"],
+  "publish_at": "2026-04-21T12:00:00",
+  "created_at": "2026-04-20T12:00:00",
+  "updated_at": "2026-04-21T12:00:00"
+}
+```
 
-前端可直接使用返回的 `image_url` 插入正文 HTML。
-
-#### 存储规则
-- 目录：`<项目根目录>/media/article/content/YYYYMM/`
-- 文件名：`content_{article_id去掉-}_{yyyyMMddHHmmss}_{index}_{8位随机串}.{ext}`
-- 同时写入 `article_pics`，并标记 `is_cover=false`
-
----
-
-### Search Tags
-**Method**: `GET`  
-**Path**: `/admin/article/tag/search`
-
-#### Query
-| 参数 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| keyword | string | - | 按 tag 名模糊查询 |
-| limit | integer(1-100) | 20 | 返回条数上限 |
-
-#### 响应
-`{"items": [{"tag_id", "name", "created_at", "updated_at"}, ...], "total": <总数>}`
+常见错误：
+- `404`：文章不存在或未发布
 
 ---
 
-### Create Tag
-**Method**: `POST`  
-**Path**: `/admin/article/tag`
+### GET `/culture_share/tags`
+公开接口。获取高频标签。
 
-#### 请求体
-`{"name": "历史文化"}`
+Query：
 
-#### 响应
-`{"tag_id": "...", "name": "历史文化", "created_at": "...", "updated_at": "..."}`
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `limit` | int | 否 | `10` |
 
-> 文章创建/更新时，`tags` 字段会自动去重清洗并同步写入 `article_tags` 表。
+成功响应：
 
-------
+```json
+{
+  "total": 10,
+  "items": [
+    {
+      "tag_id": "tag_xxx",
+      "name": "文化",
+      "usage_count": 8
+    }
+  ]
+}
+```
+
+---
+
+## Search API
+
+### POST `/search/word`
+公开接口。精确查词。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `query` | string | 是 | - |
+| `language` | `fr \| jp` | 是 | - |
+| `sort` | `relevance \| date` | 否 | `date` |
+| `order` | `asc \| des` | 否 | `des` |
+
+成功响应：
+
+```json
+{
+  "query": "bonjour",
+  "pos": ["n.", "v."],
+  "contents": [
+    {
+      "pos": "n.",
+      "chi_exp": "中文释义",
+      "eng_explanation": "english explanation",
+      "example": "example"
+    }
+  ],
+  "hiragana": null
+}
+```
+
+说明：
+- 法语返回 `contents[].pos / chi_exp / eng_explanation / example`
+- 日语返回 `contents[].chi_exp / example`，并可能带 `hiragana`
+
+---
+
+### POST `/search/list/word`
+公开接口。查词联想。
+
+请求体同 `/search/word`。
+
+成功响应：
+
+```json
+{
+  "list": []
+}
+```
+
+`list` 中元素来自服务层合并结果，实际可能是字符串、数组或对象，前端需做兼容解析。
+
+---
+
+### POST `/search/list/proverb`
+公开接口。法语谚语联想。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `query` | string | 是 | - |
+| `dict_language` | `fr \| jp` | 否 | `fr` |
+
+成功响应：
+
+```json
+{
+  "list": [
+    {
+      "id": 1,
+      "proverb": "Petit à petit...",
+      "chi_exp": "中文释义"
+    }
+  ]
+}
+```
+
+---
+
+### POST `/search/proverb`
+公开接口。谚语详情。
+
+请求体：`application/x-www-form-urlencoded`
+
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `proverb_id` | int | 是 |
+
+成功响应：
+
+```json
+{
+  "result": {
+    "id": 1,
+    "text": "谚语原文",
+    "chi_exp": "中文释义"
+  }
+}
+```
+
+---
+
+### POST `/search/list/idiom`
+公开接口。日语惯用句联想。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `query` | string | 是 | - |
+| `dict_language` | `fr \| jp` | 否 | `fr` |
+
+成功响应：
+
+```json
+{
+  "list": [
+    {
+      "id": 1,
+      "text": "原文",
+      "search_text": "かな",
+      "chi_exp": "中文释义"
+    }
+  ]
+}
+```
+
+---
+
+### POST `/search/idiom`
+公开接口。日语惯用句详情。
+
+请求参数：
+- `query_id`：通过 Query 传入整数 ID
+
+成功响应：
+
+```json
+{
+  "result": {
+    "id": 1,
+    "text": "原文",
+    "search_text": "かな",
+    "chi_exp": "中文释义",
+    "example": "例句"
+  }
+}
+```
+
+---
+
+## Translation API
+
+### POST `/translate`
+翻译接口。
+需要登录。
+每用户当前有简单限流：约 `1 秒内最多 2 次请求`。
+
+请求体：
+
+| 字段 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `query` | string | 是 | - |
+| `from_lang` | `auto \| fra \| jp \| zh \| en` | 否 | `auto` |
+| `to_lang` | `fra \| jp \| zh \| en` | 是 | - |
+
+成功响应：
+
+```json
+{ "translated_text": "翻译结果" }
+```
+
+常见错误：
+- `400`：百度翻译返回错误、参数不合法
+- `401`：未登录
+- `429`：限流触发
+
+---
+
+### POST `/translate/debug`
+管理员调试翻译接口。
+需要管理员权限。
+
+参数通过 Query 传入：
+
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `query` | string | 是 | - |
+| `from_lang` | string | 否 | `auto` |
+| `to_lang` | string | 否 | `zh` |
+
+成功响应与 `/translate` 相同。
+
+---
 
 ## AI Assist API
 
-### Explain Word
-**Method**: `POST`  
-**Path**: `/ai_assist/word/exp`  
-需要认证
+### POST `/ai_assist/word/exp`
+词语 AI 问答。
+需要登录。
 
-#### 请求体
-| 字段   | 类型   | 必填 | 说明         |
-|--------|--------|------|--------------|
-| word   | string | 是   | 目标词汇     |
-| question| string| 是   | 关于该词的问题 |
+请求体：
 
-#### 响应
-`AIAnswerOut`：`word`、`answer`（经过后处理）、`model`、`tokens_used`。  
-当用户当月使用次数超过 100 且非管理员时返回 400。调用第三方 AI 失败则 500。
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `word` | string | 是 |
+| `question` | string | 是 |
 
----
+成功响应：
 
-### Clear Word Chat History
-**Method**: `POST`  
-**Path**: `/ai_assist/clear`  
-需要认证
+```json
+{
+  "word": "bonjour",
+  "answer": "解释内容",
+  "model": "deepseek-r1-671b",
+  "tokens_used": 123
+}
+```
 
-#### 请求体
-| 字段 | 类型   | 必填 | 说明      |
-|------|--------|------|-----------|
-| word | string | 是   | 要清除的词 |
-
-#### 响应
-`{"msg": "已清除 <word> 的聊天记录"}`
+常见错误：
+- `400`：本月 API 使用量已超
+- `500`：上游 AI 服务异常
 
 ---
 
-### Universal Assist (Reserved)
-**Method**: `POST`  
-**Path**: `/ai_assist/univer`
+### POST `/ai_assist/clear`
+清除指定词语的 AI 聊天记录。
+需要登录。
 
-#### 状态
-预留接口，当前后端尚未实现业务逻辑（调用返回空响应）。
+兼容两种传参方式：
+- JSON Body：`{"word": "bonjour"}`
+- Query：`?word=bonjour`
 
-------
+成功响应：
+
+```json
+{ "msg": "已清除 bonjour 的聊天记录" }
+```
+
+---
+
+### POST `/ai_assist/univer`
+占位接口。
+当前实现为空，返回值不稳定，不建议接入。
+
+---
 
 ## Article Director API
 
-### Submit Article
-**Method**: `POST`  
-**Path**: `/article-director/article`  
-需要认证
+### POST `/article-director/article`
+作文批改。
+需要登录。
 
-#### Query
-`lang`：`en-US` / `fr-FR` / `ja-JP`，默认 `fr-FR`。
+Query：
 
-#### 请求体
-| 字段        | 类型   | 必填 | 说明                 |
-|-------------|--------|------|----------------------|
-| theme       | string | 否   | 文章主题             |
-| content     | string | 是   | 完整文章内容         |
-| article_type| string | 是   | 作文类型             |
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `lang` | `en-US \| fr-FR \| ja-JP` | 否 | `fr-FR` |
 
-#### 响应
-`{"reply": <指导>, "tokens": <用量>, "conversation_length": <当前上下文长度>}`。  
-接口会自动维护 Redis 会话，上游需要在调用后再调用 reset。
+请求体：
 
----
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `theme` | string | 否 |
+| `content` | string | 是 |
+| `article_type` | string | 是 |
 
-### Follow-up Question
-**Method**: `POST`  
-**Path**: `/article-director/question`  
-需要认证
+成功响应：
 
-#### 请求体
-| 字段 | 类型   | 必填 | 说明   |
-|------|--------|------|--------|
-| query| string | 是   | 追问内容 |
-
-#### 响应
-同上，返回最新回答、tokens 与对话长度。
+```json
+{
+  "reply": "批改结果",
+  "tokens": 512,
+  "conversation_length": 2
+}
+```
 
 ---
 
-### Reset Conversation
-**Method**: `POST`  
-**Path**: `/article-director/reset`  
-需要认证
+### POST `/article-director/question`
+作文追问。
+需要登录。
 
-#### 响应
-`{"message": "已重置用户 <id> 的作文对话记录"}`
+请求体：
 
-------
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `query` | string | 是 |
 
-## Feedback API
+成功响应结构与 `/article-director/article` 一致。
 
-### Submit Feedback
-**Method**: `POST`  
-**Path**: `/improvements`  
-需要认证
+---
 
-#### 请求体
-| 字段       | 类型   | 必填 | 说明 |
-|------------|--------|------|------|
-| report_part| enum   | 是   | `ui_design` / `dict_fr` / `dict_jp` / `user` / `translate` / `writting` / `ai_assist` / `pronounce`（`comment_api_test` 仅测试用） |
-| text       | string | 是   | 反馈内容 |
+### POST `/article-director/reset`
+重置作文上下文。
+需要登录。
 
-#### 响应
-`{"massages": "feedback succeed"}`，同时触发邮件通知。
+成功响应：
 
-------
+```json
+{ "message": "已重置用户 1 的作文对话记录" }
+```
+
+---
 
 ## Pronunciation Test API
-前缀：`/test/pron`，均需认证。
 
-### Start Test
-**Method**: `GET`  
-**Path**: `/test/pron/start`
+以下接口全部需要登录。
 
-#### Query / Form
-| 参数 | 类型                | 默认 | 说明                         |
-|------|---------------------|------|------------------------------|
-| count| integer             | 20   | 需要的句子数量               |
-| lang | string(enum: fr-FR, ja-JP) | fr-FR | 语言（通过 `Form` 读取） |
+### GET `/test/pron/start`
+开始或恢复发音测评。
 
-#### 响应
-`{"ok": True, "resumed": <bool>, "session": {"lang": ..., "current_index": ..., "sentence_ids": [...], "total": ...}}`
+Query：
 
----
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `count` | int | 否 | `20` |
+| `lang` | `fr-FR \| ja-JP` | 否 | `fr-FR` |
 
-### Submit Sentence Recording
-**Method**: `POST`  
-**Path**: `/test/pron/sentence_test`
+成功响应：
 
-#### 请求体
-| 字段  | 类型      | 必填 | 说明                      |
-|-------|-----------|------|---------------------------|
-| record| UploadFile| 是   | `.wav` 音频文件           |
-| lang  | string(enum: fr-FR, ja-JP) | 是 | 语言（Form 字段） |
-
-#### 响应
-成功时：`{"ok": True, "data": {...评分... , "progress": "X/Y"}}`。  
-无会话返回 `{"ok": False, "error": "No active test session"}`；音频格式/评分失败返回 400/415。
+```json
+{
+  "ok": true,
+  "resumed": false,
+  "message": "New fr-FR test started",
+  "session": {
+    "lang": "fr-FR",
+    "current_index": 0,
+    "sentence_ids": [1, 2, 3],
+    "total": 3
+  }
+}
+```
 
 ---
 
-### Get Current Sentence
-**Method**: `GET`  
-**Path**: `/test/pron/current_sentence`
+### POST `/test/pron/sentence_test`
+上传单句录音并打分。
 
-#### 响应
-- 有会话：`{"ok": True, "index": <idx>, "current_sentence": "<text>"}`  
-- 无会话：`{"ok": False, "error": "No active test session"}`
+请求体：`multipart/form-data`
 
----
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `record` | file | 是 | 仅支持 `.wav` |
+| `lang` | `fr-FR \| ja-JP` | 是 | 必须与当前 session 语言一致 |
 
-### Get Test Sentence List
-**Method**: `POST`  
-**Path**: `/test/pron/testlist`
+成功响应：
 
-返回会话中的句子数组 `[{id, text}, ...]`，若无会话则错误同上。
-
----
-
-### Finish Test
-**Method**: `POST`  
-**Path**: `/test/pron/finish`
-
-#### 请求体
-| 字段   | 类型  | 必填 | 说明                        |
-|--------|-------|------|-----------------------------|
-| confirm| bool  | 否   | 当测试未完成时是否强制结束（Form 字段，默认 False） |
-
-#### 响应
-- 未开始：`{"ok": False, "message": "No active test session to finish"}`  
-- 未完成且未确认：返回剩余数量提示  
-- 强制结束：`{"ok": True, "forced_end": True, "data": {...}}`  
-- 全部完成：返回 `{"ok": True, "data": {...}}` 并写入数据库
+```json
+{
+  "ok": true,
+  "data": {
+    "ok": true,
+    "overall_score": 90,
+    "accuracy": 88,
+    "fluency": 91,
+    "completeness": 92,
+    "recognized_text": "text",
+    "progress": "1/5"
+  }
+}
+```
 
 ---
 
-### Clear Session
-**Method**: `POST`  
-**Path**: `/test/pron/clear_session`
+### GET `/test/pron/current_sentence`
+获取当前待测句子。
 
-#### 响应
-`{"ok": True, "message": "Session cleared"}`
+成功响应：
 
-------
+```json
+{
+  "ok": true,
+  "index": 0,
+  "current_sentence": "句子文本",
+  "total": 5
+}
+```
 
-## Dictionary Search API
+若无会话：
 
-### Exact Word Search
-**Method**: `POST`  
-**Path**: `/search/word`  
-需要认证
-
-#### 请求体
-`SearchRequest`：`query`、`language`(fr/jp)、`sort`(relevance/date)、`order`(asc/des)。  
-
-#### 响应
-`WordSearchResponse`：`query`、`pos`、`contents`（按语言返回对应结构），日语额外返回 `hiragana`。  
-404 表示词条不存在。
+```json
+{ "ok": false, "error": "No active test session" }
+```
 
 ---
 
-### Suggest Word List
-**Method**: `POST`  
-**Path**: `/search/list/word`  
-需要认证
+### POST `/test/pron/testlist`
+获取当前测试会话中的题目列表。
 
-#### 请求体
-同 `SearchRequest`。
+成功响应：
 
-#### 响应
-`{"list": [<候选词/释义> ...]}`，根据语言自动混合联想与释义匹配。
-
----
-
-### Suggest Proverbs
-**Method**: `POST`  
-**Path**: `/search/list/proverb`
-
-#### 请求体
-`ProverbSearchRequest`：`query`、`dict_language`(默认 fr)。
-
-#### 响应
-`{"list": [...]}`，按语言返回谚语候选。
+```json
+[
+  { "id": 1, "text": "句子 1" },
+  { "id": 2, "text": "句子 2" }
+]
+```
 
 ---
 
-### Get Proverb Detail
-**Method**: `POST`  
-**Path**: `/search/proverb`
+### POST `/test/pron/finish`
+结束测评。
 
-#### 请求体
-| 字段     | 类型 | 必填 | 说明        |
-|----------|------|------|-------------|
-| proverb_id | int | 是   | 谚语 ID（Form 字段） |
+请求体：`application/x-www-form-urlencoded`
 
-#### 响应
-`{"result": {"id": ..., "text": ..., "chi_exp": ...}}`
+| 字段 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `confirm` | bool | 否 | `false` |
 
----
-
-### Suggest Idioms
-**Method**: `POST`  
-**Path**: `/search/list/idiom`
-
-#### 请求体
-`ProverbSearchRequest`（`dict_language` 仅允许 `jp`）。  
-服务会进行语言检测、假名转换和多策略匹配。
-
-#### 响应
-`{"list": [{"text": ..., "search_text": ..., ...}, ...]}`，顺序与匹配策略保持一致。
+成功返回分三类：
+- 未完成且 `confirm=false`：返回 `ok=false, unfinished=true`
+- 未完成且 `confirm=true`：返回 `ok=true, forced_end=true, data=部分结果`
+- 已完成：返回 `ok=true, data=完整结果`
 
 ---
 
-### Get Idiom Detail
-**Method**: `POST`  
-**Path**: `/search/idiom`
+### POST `/test/pron/clear_session`
+清空当前 Redis 中的发音测试会话。
 
-#### 请求体
-| 字段   | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| query_id | int | 是 | 成语 ID |
+成功响应：
 
-#### 响应
-`{"result": {"id": ..., "text": ..., "search_text": ..., "chi_exp": ..., "example": ...}}`
-
-------
-
-## Translator API
-
-### Translate
-**Method**: `POST`  
-**Path**: `/translate`  
-需要认证，且默认开启速率限制（同用户在 1 秒内最多 2 次）。
-
-#### 请求体
-| 字段      | 类型                             | 默认 | 说明                                   |
-|-----------|----------------------------------|------|----------------------------------------|
-| query     | string                           | 是   | 待翻译文本                             |
-| from_lang | enum(auto, fra, jp, zh, en)      | auto | 源语言                                 |
-| to_lang   | enum(fra, jp, zh, en)            | zh   | 目标语言（不可为 auto，且不能与 from 相同） |
-
-#### 响应
-`{"translated_text": "<结果>"}`。  
-第三方 API 报错会转为 400。
+```json
+{
+  "ok": true,
+  "message": "Session cleared"
+}
+```
 
 ---
 
-### Translate (Debug)
-**Method**: `POST`  
-**Path**: `/translate/debug`  
-仅管理员可用，受同样的速率限制。
+## Comment API
 
-#### Query
-| 参数 | 默认 | 说明          |
-|------|------|---------------|
-| query| -    | 待翻译文本    |
-| from_lang | auto | 源语言 |
-| to_lang | zh | 目标语言 |
+### POST `/improvements`
+提交用户反馈。
+需要登录。
 
-#### 响应
-与正式接口一致。
+请求体：
 
-------
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---:|---|
+| `report_part` | string | 是 | 允许值：`ui_design`、`dict_fr`、`dict_jp`、`user`、`translate`、`writting`、`ai_assist`、`pronounce` |
+| `text` | string | 是 | 反馈内容 |
+
+成功响应：
+
+```json
+{ "massages": "feedback succeed" }
+```
+
+---
+
+## Public Info API
+
+### GET `/about-us`
+获取“关于应用”展示所需的公开信息。
+无需登录。
+
+成功响应：
+
+```json
+{
+  "app_name": "Lexiverse",
+  "version": "2.1",
+  "description": "面向小语种学习者的词典与学习平台，提供法语/日语查词、文化阅读、AI 辅助、翻译与发音测评能力。",
+  "website": "https://lexiverse.com.cn",
+  "team": "Lexiverse 团队"
+}
+```
+
+注意：
+- 返回字段名当前实现是 `massages`，不是 `message`。
+
+---
 
 ## Word Comment API
 
-### Create Word Comment
-**Method**: `POST`  
-**Path**: `/comment/word/{lang}`  
-需要认证
+### POST `/comment/word/{lang}`
+提交词条评论。
+需要登录。
 
-#### Path
-| 参数 | 说明           |
-|------|----------------|
-| lang | `fr` 或 `jp`   |
+Path 参数：
 
-#### 请求体
-| 字段          | 类型   | 必填 | 说明           |
-|---------------|--------|------|----------------|
-| comment_word  | string | 是   | 关联的单词文本 |
-| comment_content | string | 是 | 评论内容       |
+| 参数 | 类型 | 必填 |
+|---|---|---:|
+| `lang` | `fr \| jp` | 是 |
 
-#### 响应
-200（空体）。评论会记录用户 ID 与语言。
+请求体：
 
-------
+| 字段 | 类型 | 必填 |
+|---|---|---:|
+| `comment_word` | string | 是 |
+| `comment_content` | string | 是 |
 
-## Util API
-
-### Get Search Count
-**Method**: `GET`  
-**Path**: `/search_time`
-
-#### 响应
-`{"count": <int>}`，若首次访问会初始化为 0。
+当前实现成功后未显式返回内容，HTTP 200 响应体通常为 `null`。
 
 ---
 
-### Reset Search Count
-**Method**: `GET`  
-**Path**: `/search/reset`
+## Admin Article API
 
-#### 响应
-`{"message": "search times reset successfully"}`
+以下接口全部需要管理员权限，统一前缀为 `/admin/article`。
 
-------
+### POST `/admin/article/create_article`
+创建文章。
 
-## Redis Test API
+### PUT `/admin/article/{article_id}`
+更新文章。
 
-### Ping Redis
-**Method**: `GET`  
-**Path**: `/ping-redis`
+### POST `/admin/article/{article_id}/publish`
+发布文章。
 
-#### 响应
-`{"pong": true, "redis": {...连接参数...}}`
+### POST `/admin/article/{article_id}/unpublish`
+撤回为草稿。
 
-------
+### DELETE `/admin/article/{article_id}`
+删除文章。
 
-## 错误模型
+### GET `/admin/article/{article_id}`
+获取文章详情。
 
-### ValidationError
+### GET `/admin/article/{article_id}/published`
+查询发布状态。
 
-| 字段 | 类型                    | 必填 | 说明       |
-| ---- | ----------------------- | ---- | ---------- |
-| loc  | array[string / integer] | 是   | Location   |
-| msg  | string                  | 是   | Message    |
-| type | string                  | 是   | Error Type |
+### GET `/admin/article/{article_id}/banner`
+查询轮播状态。
 
-### HTTPValidationError
+### GET `/admin/article`
+文章列表。
 
-| 字段   | 类型                   | 必填 | 说明   |
-| ------ | ---------------------- | ---- | ------ |
-| detail | array[ValidationError] | 否   | Detail |
+Query：
+
+| 参数 | 类型 | 必填 |
+|---|---|---:|
+| `page` | int | 否 |
+| `page_size` | int | 否 |
+| `status` | string | 否 |
+| `category` | string | 否 |
+| `keyword` | string | 否 |
+
+### POST `/admin/article/{article_id}/cover/upload`
+上传封面图。`multipart/form-data`，字段名 `file`。
+
+### POST `/admin/article/upload-temp-images`
+临时上传正文图片。`multipart/form-data`，字段名 `files`，支持多图。
+
+### DELETE `/admin/article/upload-temp-images`
+删除临时图片。
+
+请求体：
+
+```json
+{
+  "image_urls": ["url1", "url2"]
+}
+```
+
+### POST `/admin/article/{article_id}/content-images/upload`
+上传正文图片。`multipart/form-data`，字段名 `files`。
+
+### GET `/admin/article/tag/search`
+搜索标签。
+
+Query：
+
+| 参数 | 类型 | 必填 | 默认值 |
+|---|---|---:|---|
+| `keyword` | string | 否 | - |
+| `limit` | int | 否 | `20` |
+
+### POST `/admin/article/tag`
+创建标签。
+
+请求体：
+
+```json
+{ "name": "文化" }
+```
+
+### POST `/admin/article/{article_id}/banner/switch`
+开关文章轮播状态。
+
+请求体字段：
+- `enabled`
+- `title`
+- `subtitle`
+- `image_url`
+- `target_url`
+- `sort_order`
+- `start_at`
+- `end_at`
+
+所有管理员文章接口的详细响应字段，请以
+[admin_articles_schemas.py](/Users/godrictan/Desktop/ECNU/双创/小语种词典/dict_server/app/api/admin/admin_articles/admin_articles_schemas.py)
+为准。
+
+---
+
+## Miniapp API
+
+### GET `/miniapp/home`
+公开接口。返回小程序首页聚合数据。
+
+成功响应：
+
+```json
+{
+  "banners": [],
+  "hot_tags": [],
+  "featured_articles": [],
+  "quick_entries": [
+    {
+      "key": "search",
+      "title": "词汇查询",
+      "subtitle": "查找单词、近义词与语境解释",
+      "target_page": "/pages/search/index"
+    }
+  ]
+}
+```
+
+---
+
+## Utility / Test API
+
+### GET `/ping-redis`
+公开测试接口。返回 Redis 连通信息。
+
+### GET `/search_time`
+公开接口。读取累计搜索次数。
+
+成功响应：
+
+```json
+{ "count": 123 }
+```
+
+### GET `/search/reset`
+公开接口。重置累计搜索次数。
+
+成功响应：
+
+```json
+{ "message": "search times reset successfully" }
+```

@@ -23,22 +23,31 @@ users_router.include_router(auth_wechat_router, prefix="/auth/wechat", tags=["we
 async def register(req: Request, user_in: UserIn):
     await service.validate_username(user_in.username)
     await service.validate_password(user_in.password)
-    # await service.validate_email_exists(user_in.email)
-    result = await service.verify_email_code(
+    phone = req.app.state.phone_encrypto.normalize(user_in.phone)
+    phone_hash = req.app.state.phone_encrypto.hash(phone)
+    await service.validate_email_exists(user_in.email)
+    await service.validate_phone_available(phone_hash)
+
+    email_ok = await service.verify_email_code(
         redis=req.app.state.redis,
         email=user_in.email,
         input_code=user_in.code
     )
-    if not result:
-        raise HTTPException(status_code=400, detail="验证码错误或已过期")
+    if not email_ok:
+        raise HTTPException(status_code=400, detail="邮箱验证码错误或已过期")
+
+    phone_ok = await service.varify_phone_code(
+        redis=req.app.state.redis,
+        phone=phone,
+        input_code=user_in.phone_code,
+    )
+    if not phone_ok:
+        raise HTTPException(status_code=400, detail="短信验证码错误或已过期")
 
     hashed_pwd = service.hash_password(user_in.password)
 
     lang_pref = await Language.get(code=user_in.lang_pref)
-
-    phone = req.app.state.phone_encrypto.normalize(user_in.phone) if user_in.phone else None
-    encrypted_phone = req.app.state.phone_encrypto.encrypt(phone) if phone else None
-    phone_hash = req.app.state.phone_encrypto.hash(phone) if phone else None
+    encrypted_phone = req.app.state.phone_encrypto.encrypt(phone)
 
     try:
         new_user = await User.create(
@@ -78,6 +87,19 @@ async def register_email_verify(req: Request, user_email: UserResetEmailRequest)
     )
 
     print(f"[DEBUG] 给 {user_email.email} 发送验证码：{code}")
+
+    return {"message": "验证码已发送"}
+
+
+@users_router.post("/register/phone_verify")
+async def register_phone_verify(req: Request, user_phone: UserResetPhoneRequest):
+    phone = req.app.state.phone_encrypto.normalize(user_phone.phone_number)
+    phone_hash = req.app.state.phone_encrypto.hash(phone)
+    await service.validate_phone_available(phone_hash)
+
+    code = service.generate_code()
+    redis = req.app.state.redis
+    await service.send_sms_code(redis=redis, phone=phone, code=code, ops_type="reg")
 
     return {"message": "验证码已发送"}
 

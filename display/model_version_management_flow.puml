@@ -1,0 +1,27 @@
+@startuml
+!pragma useLayout legacy
+skinparam backgroundColor transparent
+skinparam defaultFontName "PingFang SC"
+skinparam defaultFontSize 14
+skinparam RankSep 50
+skinparam NodeSep 40
+skinparam shadowing false
+skinparam ArrowThickness 1
+
+title 模型版本管理简要流程
+
+start
+
+:基模型登记 & 记录基线指标;
+:微调完成生成候选模型;
+:在 Model Registry 创建新版本记录;
+:推送到推理服务 (小流量验证);
+if (线上指标达标?) then (是)
+  :标记为 Stable 并全量发布;
+else (否)
+  :回滚至上一个 Stable 版本;
+endif
+:归档版本配置与回滚说明;
+
+stop
+@enduml

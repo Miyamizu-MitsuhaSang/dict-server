@@ -21,6 +21,7 @@ from app.api.user.routes import users_router
 from app.api.util_api.routes import ulit_router
 from app.api.word_comment.routes import word_comment_router
 from app.core.redis import init_redis, close_redis
+from app.monitor import monitor_router, register_monitor
 from app.utils.phone_encrypt import PhoneEncrypt
 from settings import ONLINE_SETTINGS, ROOT_DIR
 
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+register_monitor(app)
 media_root = ROOT_DIR / "media"
 media_root.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=str(media_root)), name="media")
@@ -79,6 +81,8 @@ app.include_router(miniapp_router, tags=["Miniapp API"], prefix="/miniapp")
 app.include_router(article_router, tags=["Article API"])
 
 app.include_router(ulit_router, tags=["Util Functions API"])
+
+app.include_router(monitor_router, tags=["Monitor API"], prefix="/monitor")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

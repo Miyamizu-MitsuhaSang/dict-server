@@ -30,6 +30,19 @@ wheels = [
 ]
 
 [[package]]
+name = "alipay-sdk-python"
+version = "3.7.1098"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "pycryptodome" },
+    { name = "rsa" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/7f/9a/50c461add0e59d671ff58ebbb44a38d8406a93d9f2269dbbc32e53d3fa75/alipay_sdk_python-3.7.1098.tar.gz", hash = "sha256:08590765f7121ee2ecc5fb6ae46cd79064a9f0f794bb1879d02e02354e58af3b", size = 9779976, upload-time = "2026-04-09T04:34:10.139Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/1c/7c/b522405de4a8ef8609ee584cd8ac9e6e106af4f0f1b7dc5df1350335c1f3/alipay_sdk_python-3.7.1098-py3-none-any.whl", hash = "sha256:e3dedef01221815ad1e0bd290603373de7a26caaba487ee598dfbb71c271ae83", size = 30568408, upload-time = "2026-04-09T04:34:03.636Z" },
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -328,6 +341,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "aerich" },
     { name = "aiosqlite" },
+    { name = "alipay-sdk-python" },
     { name = "annotated-types" },
     { name = "anyio" },
     { name = "async-timeout" },
@@ -395,6 +409,7 @@ dependencies = [
 requires-dist = [
     { name = "aerich", specifier = "==0.9.1" },
     { name = "aiosqlite", specifier = "==0.21.0" },
+    { name = "alipay-sdk-python", specifier = ">=3.7.1098" },
     { name = "annotated-types", specifier = "==0.7.0" },
     { name = "anyio", specifier = "==4.10.0" },
     { name = "async-timeout", specifier = "==5.0.1" },
