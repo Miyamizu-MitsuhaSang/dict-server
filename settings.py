@@ -32,7 +32,7 @@ TORTOISE_ORM = {
 
 ONLINE_SETTINGS = {
     'connections': {
-        'default': 'mysql://kingqin:enterprise927@127.0.0.1:3306/test_db',
+        'default': 'mysql://kingqin:enterprise@127.0.0.1:3306/test_db',
     },
     'apps': {
         'models': {
