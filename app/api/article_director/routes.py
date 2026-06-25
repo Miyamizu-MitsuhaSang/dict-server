@@ -11,17 +11,18 @@ from starlette.requests import Request
 from app.api.article_director import service
 from app.api.article_director.article_schemas import UserArticleRequest, UserQuery
 from app.models import User
-from app.utils.security import get_current_user
+from app.utils.security import is_id_verified_user
 
 article_router = APIRouter()
 
 
+# TODO 调用文本检测接口
 @article_router.post("/article-director/article")
 async def article_director(
         request: Request,
         upload_article: UserArticleRequest,
         lang: Literal["en-US", "fr-FR", "ja-JP"] = "fr-FR",
-        user: Tuple[User, Dict] = Depends(get_current_user)
+        user: Tuple[User, Dict] = Depends(is_id_verified_user)
 ):
     """
     文本形式接口，即直接从文本框中获取
@@ -122,7 +123,7 @@ async def article_director(
 async def further_question(
         request: Request,
         user_prompt: UserQuery,
-        user: Tuple[User, Dict] = Depends(get_current_user)
+        user: Tuple[User, Dict] = Depends(is_id_verified_user)
 ):
     redis = request.app.state.redis
 
@@ -192,7 +193,7 @@ async def further_question(
     }
 
 @article_router.post("/article-director/reset", description="重置上下文")
-async def reset_conversation(request: Request, user: Tuple[User, Dict] = Depends(get_current_user)):
+async def reset_conversation(request: Request, user: Tuple[User, Dict] = Depends(is_id_verified_user)):
     user_id = user[0].id
     redis = request.app.state.redis
     await service.reset_session(redis, user_id)

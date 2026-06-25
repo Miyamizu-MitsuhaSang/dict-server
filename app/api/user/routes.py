@@ -7,59 +7,39 @@ from tortoise.exceptions import IntegrityError
 
 from app.api.user.user_schemas import UserIn, UpdateUserRequest, UserLoginRequest, UserResetPhoneRequest, \
     VerifyPhoneCodeRequest, UserResetEmailRequest, UserResetPasswordRequest, VerifyEmailRequest, RefreshTokenRequest, \
-    LogoutRequest
+    LogoutRequest, BindPhoneRequest
 from app.core.redis import get_redis
 from app.models.base import ReservedWords, User, Language
 from app.utils.security import get_current_user
 from . import service
 from .auth_wechat.routes import auth_wechat_router
+from .id_verfication.routes import id_verification_router
 
 users_router = APIRouter()
 
 users_router.include_router(auth_wechat_router, prefix="/auth/wechat", tags=["wechat login APIs"])
+users_router.include_router(id_verification_router, prefix="/auth/id_verify", tags=["ID Verification APIs"])
 
 
 @users_router.post("/register")
 async def register(req: Request, user_in: UserIn):
     await service.validate_username(user_in.username)
     await service.validate_password(user_in.password)
-    phone = req.app.state.phone_encrypto.normalize(user_in.phone)
-    phone_hash = req.app.state.phone_encrypto.hash(phone)
     await service.validate_email_exists(user_in.email)
-    await service.validate_phone_available(phone_hash)
-
-    email_ok = await service.verify_email_code(
-        redis=req.app.state.redis,
-        email=user_in.email,
-        input_code=user_in.code
-    )
-    if not email_ok:
-        raise HTTPException(status_code=400, detail="邮箱验证码错误或已过期")
-
-    phone_ok = await service.varify_phone_code(
-        redis=req.app.state.redis,
-        phone=phone,
-        input_code=user_in.phone_code,
-    )
-    if not phone_ok:
-        raise HTTPException(status_code=400, detail="短信验证码错误或已过期")
 
     hashed_pwd = service.hash_password(user_in.password)
 
     lang_pref = await Language.get(code=user_in.lang_pref)
-    encrypted_phone = req.app.state.phone_encrypto.encrypt(phone)
 
     try:
         new_user = await User.create(
             name=user_in.username,
-            email=user_in.email,
+            email=user_in.email or None,
             pwd_hashed=hashed_pwd,
             language=lang_pref,
-            encrypted_phone=encrypted_phone,
-            phone_hash=phone_hash,
         )
     except IntegrityError:
-        raise HTTPException(status_code=400, detail="邮箱或手机号已被注册")
+        raise HTTPException(status_code=400, detail="用户名或邮箱已被注册")
 
     token = service.token_issuer(user_id=new_user.id, is_admin=new_user.is_admin)
 
@@ -71,6 +51,48 @@ async def register(req: Request, user_in: UserIn):
     }
 
 
+@users_router.post("/phone")
+async def bind_phone(
+        req: Request,
+        body: BindPhoneRequest,
+        current_user: Tuple[User, Dict] = Depends(get_current_user),
+):
+    user, _ = current_user
+    if user.phone_hash:
+        raise HTTPException(status_code=400, detail="手机号已绑定")
+
+    phone = req.app.state.phone_encrypto.normalize(body.phone_number)
+    phone_hash = req.app.state.phone_encrypto.hash(phone)
+    await service.validate_phone_available(phone_hash)
+
+    phone_ok = await service.verify_phone_code(
+        redis=req.app.state.redis,
+        phone=phone,
+        input_code=body.code,
+    )
+    if not phone_ok:
+        raise HTTPException(status_code=400, detail="短信验证码错误或已过期")
+
+    user.encrypted_phone = req.app.state.phone_encrypto.encrypt(phone)
+    user.phone_hash = phone_hash
+    await user.save(update_fields=["encrypted_phone", "phone_hash"])
+
+    return {"message": "手机号绑定成功"}
+
+
+@users_router.post("/phone_verify")
+async def bind_phone_verify(req: Request, user_phone: UserResetPhoneRequest):
+    phone = req.app.state.phone_encrypto.normalize(user_phone.phone_number)
+    phone_hash = req.app.state.phone_encrypto.hash(phone)
+    await service.validate_phone_available(phone_hash)
+
+    code = service.generate_code()
+    redis = req.app.state.redis
+    await service.send_phone_code(redis=redis, phone=phone, code=code, ops_type="reg")
+
+    return {"message": "验证码已发送"}
+
+
 @users_router.post("/register/email_verify")
 async def register_email_verify(req: Request, user_email: UserResetEmailRequest):
     await service.validate_email_exists(user_email.email)
@@ -78,7 +100,7 @@ async def register_email_verify(req: Request, user_email: UserResetEmailRequest)
     code = service.generate_code()
     redis = req.app.state.redis
 
-    await service.save_email_code(redis, email=user_email.email, code=code)
+    await service.save_varify_code(redis, email=user_email.email, code=code)
     await service.send_email_code(
         redis=redis,
         email=user_email.email,
@@ -99,7 +121,7 @@ async def register_phone_verify(req: Request, user_phone: UserResetPhoneRequest)
 
     code = service.generate_code()
     redis = req.app.state.redis
-    await service.send_sms_code(redis=redis, phone=phone, code=code, ops_type="reg")
+    await service.send_phone_code(redis=redis, phone=phone, code=code, ops_type="reg")
 
     return {"message": "验证码已发送"}
 
@@ -222,9 +244,7 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
 
     redis = request.app.state.redis
     code = service.generate_code()
-    await service.save_code_redis(redis, phone=phone, code=code)
-
-    # TODO 短信服务
+    await service.send_phone_code(redis=redis, phone=phone, code=code, ops_type="reset")
 
     print(f"[DEBUG] 给 {phone} 发送验证码：{code}")
 
@@ -237,9 +257,19 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
 async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     redis = request.app.state.redis
     phone = request.app.state.phone_encrypto.normalize(data.phone)
-    if not await service.varify_phone_code(redis=redis, phone=phone, input_code=data.code):
+    phone_hash = request.app.state.phone_encrypto.hash(phone)
+    reset_token = await service.verify_and_get_reset_token_by_phone(
+        redis=redis,
+        phone=phone,
+        phone_hash=phone_hash,
+        input_code=data.code,
+    )
+    if not reset_token:
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
-    return {"message": "验证成功，可以重置密码"}
+
+    return {
+        "reset_token": reset_token,
+    }
 
 
 @users_router.post("/auth/forget-password/email", deprecated=False, description="邮箱遗忘接口")

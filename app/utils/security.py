@@ -101,3 +101,13 @@ async def is_admin_user(
     if not getattr(user, "is_admin", False):
         raise HTTPException(status_code=403, detail="Access denied")
     return user, payload
+
+
+async def is_id_verified_user(
+        user_payload: Tuple[User, Dict] = Depends(get_current_user),
+) -> Tuple[User, Dict]:
+    user, payload = user_payload
+    has_phone = bool(getattr(user, "encrypted_phone", None) or getattr(user, "phone_hash", None))
+    if not has_phone:
+        raise HTTPException(status_code=403, detail="请先完成手机号登记")
+    return user, payload

@@ -31,7 +31,7 @@ class ArticleUpdatePayload(ArticleBasePayload):
 
 
 class ArticleItemResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True) # 允许从对象｜类中直接取值
 
     article_id: str
     title: str

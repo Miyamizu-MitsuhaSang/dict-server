@@ -86,6 +86,9 @@ class Settings(BaseSettings):
 
     AZURE_SUBSCRIPTION_KEY: str
 
+    TENCENTCLOUD_SECRET_ID: str
+    TENCENTCLOUD_SECRET_KEY: str
+
     class Config:
         env_file = ROOT_DIR / '.env'
         case_sensitive = False

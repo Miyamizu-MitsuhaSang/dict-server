@@ -13,27 +13,22 @@ EmailField = Annotated[str, Field(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")]
 class UserIn(BaseModel):
     username: str
     password: str
-    email: str
-    phone: str
+    email: Optional[str] = None
     lang_pref: Literal['jp', 'fr', 'private'] = "private"
     portrait: str = default_portrait_url
-
-    code: str
-    phone_code: str
 
     @field_validator('email')
     @classmethod
     def validate_email(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
         if not re.match(pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$", string=v):
             raise HTTPException(status_code=400, detail="邮箱格式错误")
         return v
 
-    @field_validator('phone')
-    @classmethod
-    def validate_phone(cls, v):
-        if not re.match(pattern=r"^1[3-9]\d{9}$", string=v):
-            raise HTTPException(status_code=400, detail="手机号格式错误")
-        return v
     # @field_validator('username')
     # @classmethod
     # def validate_username(cls, v):
@@ -120,6 +115,10 @@ class UserResetPhoneRequest(BaseModel):
     phone_number: ChinaPhone
 
 
+class BindPhoneRequest(UserResetPhoneRequest):
+    code: str
+
+
 class VerifyPhoneCodeRequest(BaseModel):
     code: str
     phone: ChinaPhone
@@ -145,6 +144,7 @@ class SessionUserOut(BaseModel):
     lang_pref: str = "private"
     portrait: str = default_portrait_url
     login_type: Optional[str] = None
+    phone_bound: bool = False
 
 
 class SessionTokensOut(BaseModel):

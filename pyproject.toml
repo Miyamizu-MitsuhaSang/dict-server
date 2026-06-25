@@ -69,6 +69,7 @@ dependencies = [
     "uvicorn==0.35.0",
     "wrapt==1.17.3",
     "alipay-sdk-python>=3.7.1098",
+    "tencentcloud-sdk-python[async]",
 ]
 
 [tool.aerich]
