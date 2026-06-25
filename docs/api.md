@@ -234,14 +234,14 @@
 
 ---
 
-### POST `/users/auth/forget-password/email`
-发送邮箱找回密码验证码。
+### POST `/users/auth/forget-password/phone`
+发送手机找回密码验证码。
 
 请求体：
 
 | 字段 | 类型 | 必填 |
 |---|---|---:|
-| `email` | string | 是 |
+| `phone_number` | string | 是 |
 
 成功响应：
 
@@ -254,14 +254,14 @@
 
 ---
 
-### POST `/users/auth/varify_code/email`
-验证邮箱验证码，换取重置密码令牌。
+### POST `/users/auth/varify_code`
+验证手机验证码，换取重置密码令牌。
 
 请求体：
 
 | 字段 | 类型 | 必填 |
 |---|---|---:|
-| `email` | string | 是 |
+| `phone` | string | 是 |
 | `code` | string | 是 |
 
 成功响应：
@@ -279,7 +279,7 @@ Header：
 
 | 字段 | 必填 | 说明 |
 |---|---:|---|
-| `x-reset-token` | 是 | 由 `/users/auth/varify_code/email` 返回 |
+| `x-reset-token` | 是 | 由 `/users/auth/varify_code` 返回 |
 
 请求体：
 
@@ -468,10 +468,16 @@ Query：
 以下接口已标记弃用，且当前实现存在兼容性风险，不建议继续接入：
 
 #### POST `/users/auth/forget-password/phone`
-手机找回密码入口，代码仍挂载但实现使用了旧字段，当前不建议使用。
+手机找回密码入口，当前主路径。
 
 #### POST `/users/auth/varify_code`
-手机验证码校验接口，代码仍挂载但依赖旧实现，当前不建议使用。
+手机验证码校验接口，当前主路径。
+
+#### POST `/users/auth/forget-password/email`
+邮箱找回密码入口，保留兼容，不建议继续使用。
+
+#### POST `/users/auth/varify_code/email`
+邮箱验证码校验接口，保留兼容，不建议继续使用。
 
 ---
 

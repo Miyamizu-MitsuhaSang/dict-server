@@ -232,8 +232,8 @@ async def user_logout(
     return {"message": "logout ok"}
 
 
-# 后续通过参数合并
-@users_router.post("/auth/forget-password/phone", deprecated=True)
+# 手机号找回密码入口，发送短信验证码。
+@users_router.post("/auth/forget-password/phone", deprecated=False, description="手机号找回密码接口")
 async def forget_password(request: Request, user_request: UserResetPhoneRequest):
     phone = request.app.state.phone_encrypto.normalize(user_request.phone_number)
     phone_hash = request.app.state.phone_encrypto.hash(phone)
@@ -251,9 +251,8 @@ async def forget_password(request: Request, user_request: UserResetPhoneRequest)
     return {"message": "验证码已发送"}
 
 
-# TODO 后续升级为防止爆破测试手机号的
-
-@users_router.post("/auth/varify_code", deprecated=True)
+# 手机号验证码校验入口，换取重置密码 token。
+@users_router.post("/auth/varify_code", deprecated=False, description="手机号验证码校验接口")
 async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     redis = request.app.state.redis
     phone = request.app.state.phone_encrypto.normalize(data.phone)
@@ -272,7 +271,7 @@ async def varify_code(data: VerifyPhoneCodeRequest, request: Request):
     }
 
 
-@users_router.post("/auth/forget-password/email", deprecated=False, description="邮箱遗忘接口")
+@users_router.post("/auth/forget-password/email", deprecated=True, description="邮箱找回密码接口（旧）")
 async def email_forget_password(request: Request, user_request: UserResetEmailRequest):
     """
     用户点击验证邮箱时启用
@@ -297,7 +296,7 @@ async def email_forget_password(request: Request, user_request: UserResetEmailRe
     return {"message": "验证码已发送"}
 
 
-@users_router.post("/auth/varify_code/email")
+@users_router.post("/auth/varify_code/email", deprecated=True)
 async def email_varify_code(request: Request, data: VerifyEmailRequest):
     redis = request.app.state.redis
     reset_token = await service.verify_and_get_reset_token(redis=redis, email=data.email, input_code=data.code)
