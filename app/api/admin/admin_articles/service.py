@@ -67,11 +67,11 @@ def _extract_temp_urls(text: str | None) -> list[str]:
 def _move_temp_file_to_content(article_id: str, temp_url: str) -> str:
     temp_file = ROOT_DIR / temp_url.lstrip("/")
     if not temp_file.exists():
-        return temp_url
+        raise ValueError(f"正文临时图片不存在或已被处理：{temp_url}")
 
     ext = temp_file.suffix.lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        return temp_url
+        raise ValueError(f"正文临时图片格式不支持：{temp_url}")
 
     folder_name = datetime.now().strftime("%Y%m")
     relative_dir = Path("article/content") / folder_name
@@ -87,6 +87,15 @@ def _move_temp_file_to_content(article_id: str, temp_url: str) -> str:
     absolute_path = absolute_dir / save_name
     temp_file.replace(absolute_path)
     return f"/media/{relative_path}"
+
+
+def _validate_temp_image_urls(temp_urls: list[str]) -> None:
+    for temp_url in temp_urls:
+        temp_file = ROOT_DIR / temp_url.lstrip("/")
+        if not temp_file.exists():
+            raise ValueError(f"正文临时图片不存在或已被处理：{temp_url}")
+        if temp_file.suffix.lower() not in ALLOWED_IMAGE_EXTENSIONS:
+            raise ValueError(f"正文临时图片格式不支持：{temp_url}")
 
 
 async def _sync_promoted_pictures(article: Article, promoted_urls: list[str], cover_url: str | None) -> None:
@@ -131,6 +140,9 @@ async def promote_temp_images_for_article(
     if not temp_urls:
         return cover_url, content_html
 
+    # Validate every reference before moving files so a bad request cannot leave a partial move behind.
+    _validate_temp_image_urls(temp_urls)
+
     mapping: dict[str, str] = {}
     for temp_url in temp_urls:
         mapping[temp_url] = _move_temp_file_to_content(article.article_id, temp_url)
@@ -150,6 +162,11 @@ async def create_article(payload: ArticleCreatePayload) -> Article:
     final_publish_at = payload.publish_at
     if payload.status == "published" and final_publish_at is None:
         final_publish_at = datetime.now()
+
+    temp_urls = _extract_temp_urls(payload.content_html)
+    if payload.cover_url and payload.cover_url.startswith(TEMP_IMAGE_URL_PREFIX):
+        temp_urls = list(dict.fromkeys([payload.cover_url] + temp_urls))
+    _validate_temp_image_urls(temp_urls)
 
     final_tags = normalize_tags(payload.tags)
     await ensure_tags_exist(final_tags)

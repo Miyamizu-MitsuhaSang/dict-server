@@ -24,10 +24,15 @@ admin_banner_router = APIRouter()
     summary="创建文章",
 )
 async def create_article_api(payload: ArticleCreatePayload):
-    article = await service.create_article(payload)
+    try:
+        article = await service.create_article(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return ArticleActionResponse(
         message="文章创建成功",
-        article_id=article.article_id
+        article_id=article.article_id,
+        content_html=article.content_html,
     )
 
 @admin_banner_router.put(
@@ -40,10 +45,13 @@ async def update_article_api(article_id: str, payload: ArticleUpdatePayload):
         article = await service.update_article(article_id, payload)
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="文章不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return ArticleActionResponse(
         message="文章更新成功",
-        article_id=article.article_id
+        article_id=article.article_id,
+        content_html=article.content_html,
     )
 
 @admin_banner_router.post(

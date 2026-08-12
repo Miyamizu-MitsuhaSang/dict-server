@@ -72,6 +72,7 @@ class ArticleListResponse(BaseModel):
 class ArticleActionResponse(BaseModel):
     message: str
     article_id: str
+    content_html: str | None = None
 
 
 class ArticleCoverUploadResponse(BaseModel):
