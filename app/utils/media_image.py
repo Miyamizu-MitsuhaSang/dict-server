@@ -1,17 +1,86 @@
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
 from settings import ROOT_DIR
 
+MAX_ADMIN_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
+UPLOAD_IMAGE_MAX_WIDTH = 1600
+UPLOAD_IMAGE_MAX_HEIGHT = 1600
+UPLOAD_IMAGE_WEBP_QUALITY = 82
 BANNER_MAX_WIDTH = 1280
 BANNER_MAX_HEIGHT = 720
 BANNER_WEBP_QUALITY = 82
 COVER_THUMB_MAX_WIDTH = 360
 COVER_THUMB_MAX_HEIGHT = 480
 COVER_THUMB_WEBP_QUALITY = 76
+
+
+@dataclass(frozen=True)
+class PreparedImageUpload:
+    filename_suffix: str
+    content: bytes
+
+
+def _normalize_for_webp(img: Image.Image) -> Image.Image:
+    optimized = ImageOps.exif_transpose(img)
+    if optimized.mode in ("RGBA", "LA"):
+        return optimized.convert("RGBA")
+    if optimized.mode != "RGB":
+        return optimized.convert("RGB")
+    return optimized
+
+
+def prepare_admin_image_upload(filename: str, content: bytes) -> PreparedImageUpload:
+    if len(content) > MAX_ADMIN_IMAGE_UPLOAD_BYTES:
+        max_mb = MAX_ADMIN_IMAGE_UPLOAD_BYTES // (1024 * 1024)
+        raise ValueError(f"图片不能超过 {max_mb}MB")
+
+    try:
+        with Image.open(BytesIO(content)) as img:
+            optimized = _normalize_for_webp(img)
+            optimized.thumbnail((UPLOAD_IMAGE_MAX_WIDTH, UPLOAD_IMAGE_MAX_HEIGHT), Image.Resampling.LANCZOS)
+
+            output = BytesIO()
+            optimized.save(output, format="WEBP", quality=UPLOAD_IMAGE_WEBP_QUALITY, method=6)
+    except Exception as exc:
+        raise ValueError("图片文件无法解析") from exc
+
+    return PreparedImageUpload(filename_suffix=".webp", content=output.getvalue())
+
+
+def build_optimized_content_image_url(image_url: str | None) -> str | None:
+    if not image_url or not image_url.startswith("/media/article/content/"):
+        return image_url
+
+    source_path = (ROOT_DIR / image_url.lstrip("/")).resolve()
+    if not source_path.is_file() or source_path.suffix.lower() == ".webp":
+        return image_url
+
+    output_path = source_path.with_suffix(".webp")
+    if not output_path.is_file():
+        try:
+            with Image.open(source_path) as image:
+                optimized = _normalize_for_webp(image)
+                optimized.thumbnail(
+                    (UPLOAD_IMAGE_MAX_WIDTH, UPLOAD_IMAGE_MAX_HEIGHT),
+                    Image.Resampling.LANCZOS,
+                )
+                optimized.save(
+                    output_path,
+                    format="WEBP",
+                    quality=UPLOAD_IMAGE_WEBP_QUALITY,
+                    method=6,
+                )
+        except Exception:
+            return image_url
+
+    media_root = (ROOT_DIR / "media").resolve()
+    return f"/media/{output_path.relative_to(media_root).as_posix()}"
 
 
 def build_optimized_banner_image_url(image_url: str | None) -> str | None:

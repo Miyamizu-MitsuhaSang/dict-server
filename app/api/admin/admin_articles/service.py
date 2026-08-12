@@ -10,11 +10,16 @@ from app.api.admin.admin_articles.admin_articles_schemas import ArticleCreatePay
 from app.core.redis import redis_delete
 from app.models.articles import Article, ArticlePicture, ArticleTag, Banner
 from app.utils.article_content import sanitize_html, strip_html_tags
-from app.utils.media_image import build_optimized_banner_image_url
+from app.utils.media_image import (
+    build_optimized_banner_image_url,
+    build_optimized_content_image_url,
+    prepare_admin_image_upload,
+)
 from settings import ROOT_DIR
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 TEMP_IMAGE_URL_PREFIX = "/media/article/temp/"
+CONTENT_IMAGE_URL_PATTERN = re.compile(r"/media/article/content/[A-Za-z0-9_./-]+")
 
 
 def normalize_tags(tags: list[str]) -> list[str]:
@@ -86,7 +91,8 @@ def _move_temp_file_to_content(article_id: str, temp_url: str) -> str:
     relative_path = (relative_dir / save_name).as_posix()
     absolute_path = absolute_dir / save_name
     temp_file.replace(absolute_path)
-    return f"/media/{relative_path}"
+    content_url = f"/media/{relative_path}"
+    return build_optimized_content_image_url(content_url) or content_url
 
 
 def _validate_temp_image_urls(temp_urls: list[str]) -> None:
@@ -96,6 +102,27 @@ def _validate_temp_image_urls(temp_urls: list[str]) -> None:
             raise ValueError(f"正文临时图片不存在或已被处理：{temp_url}")
         if temp_file.suffix.lower() not in ALLOWED_IMAGE_EXTENSIONS:
             raise ValueError(f"正文临时图片格式不支持：{temp_url}")
+
+
+def normalize_content_image_urls(content_html: str) -> str:
+    content_urls = list(dict.fromkeys(CONTENT_IMAGE_URL_PATTERN.findall(content_html)))
+    normalized_html = content_html
+    for content_url in content_urls:
+        optimized_url = build_optimized_content_image_url(content_url)
+        if optimized_url and optimized_url != content_url:
+            normalized_html = normalized_html.replace(content_url, optimized_url)
+    return normalized_html
+
+
+async def _sync_content_picture_paths(article: Article) -> None:
+    pictures = await ArticlePicture.filter(article=article, is_cover=False)
+    for picture in pictures:
+        image_url = f"/media/{picture.pic_path}"
+        optimized_url = build_optimized_content_image_url(image_url)
+        if not optimized_url or optimized_url == image_url:
+            continue
+        picture.pic_path = optimized_url.removeprefix("/media/")
+        await picture.save(update_fields=["pic_path"])
 
 
 async def _sync_promoted_pictures(article: Article, promoted_urls: list[str], cover_url: str | None) -> None:
@@ -189,6 +216,8 @@ async def create_article(payload: ArticleCreatePayload) -> Article:
         cover_url=payload.cover_url,
         content_html=payload.content_html,
     )
+    resolved_html = normalize_content_image_urls(resolved_html)
+    await _sync_content_picture_paths(article)
     cleaned_html = sanitize_html(resolved_html)
     final_text = payload.content_text or strip_html_tags(cleaned_html)
 
@@ -218,6 +247,8 @@ async def update_article(article_id: str, payload: ArticleUpdatePayload) -> Arti
         cover_url=payload.cover_url,
         content_html=payload.content_html,
     )
+    resolved_html = normalize_content_image_urls(resolved_html)
+    await _sync_content_picture_paths(article)
     cleaned_html = sanitize_html(resolved_html)
     final_text = payload.content_text or strip_html_tags(cleaned_html)
 
@@ -304,6 +335,7 @@ async def upload_article_cover(article_id: str, filename: str, content: bytes) -
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise ValueError("仅支持 jpg/jpeg/png/webp/gif 图片格式")
+    prepared = prepare_admin_image_upload(filename, content)
 
     folder_name = datetime.now().strftime("%Y%m")
     relative_dir = Path("article/covers") / folder_name
@@ -313,11 +345,11 @@ async def upload_article_cover(article_id: str, filename: str, content: bytes) -
     safe_article_id = article.article_id.replace("-", "")
     unique = uuid.uuid4().hex[:8]
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    save_name = f"cover_{safe_article_id}_{timestamp}_{unique}{ext}"
+    save_name = f"cover_{safe_article_id}_{timestamp}_{unique}{prepared.filename_suffix}"
 
     relative_path = (relative_dir / save_name).as_posix()
     absolute_path = absolute_dir / save_name
-    absolute_path.write_bytes(content)
+    absolute_path.write_bytes(prepared.content)
 
     cover_url = f"/media/{relative_path}"
 
@@ -369,12 +401,13 @@ async def upload_article_content_images(
         ext = Path(filename).suffix.lower()
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             raise ValueError(f"文件 {filename} 格式不支持，仅支持 jpg/jpeg/png/webp/gif")
+        prepared = prepare_admin_image_upload(filename, content)
 
         unique = uuid.uuid4().hex[:8]
-        save_name = f"content_{safe_article_id}_{timestamp}_{idx}_{unique}{ext}"
+        save_name = f"content_{safe_article_id}_{timestamp}_{idx}_{unique}{prepared.filename_suffix}"
         relative_path = (relative_dir / save_name).as_posix()
         absolute_path = absolute_dir / save_name
-        absolute_path.write_bytes(content)
+        absolute_path.write_bytes(prepared.content)
 
         sequence = start_sequence + idx
         pic = await ArticlePicture.create(
@@ -405,11 +438,12 @@ async def upload_article_temp_images(files: list[tuple[str, bytes]]) -> list[str
         ext = Path(filename).suffix.lower()
         if ext not in ALLOWED_IMAGE_EXTENSIONS:
             raise ValueError(f"文件 {filename} 格式不支持，仅支持 jpg/jpeg/png/webp/gif")
+        prepared = prepare_admin_image_upload(filename, content)
         unique = uuid.uuid4().hex[:8]
-        save_name = f"temp_{timestamp}_{idx}_{unique}{ext}"
+        save_name = f"temp_{timestamp}_{idx}_{unique}{prepared.filename_suffix}"
         relative_path = (relative_dir / save_name).as_posix()
         absolute_path = absolute_dir / save_name
-        absolute_path.write_bytes(content)
+        absolute_path.write_bytes(prepared.content)
         urls.append(f"/media/{relative_path}")
     return urls
 
